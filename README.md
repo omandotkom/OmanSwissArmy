@@ -6,18 +6,20 @@ Oman Swiss Army Tool is a comprehensive, all-in-one web application designed to 
 
 ## 🚀 Features
 
-Access 15+ powerful tools to streamline your development workflow:
+Access 20+ powerful tools to streamline your development workflow:
 
 ### 🔧 Code & Data Formatting
 - **JSON Formatter**: Beautify and validate JSON data instantly with syntax highlighting.
 - **SQL Formatter**: Format complex SQL queries for better readability.
 - **JSON to Code**: Convert JSON objects into **TypeScript Interfaces**, **Go Structs**, or **Java Classes** automatically.
+- **HTML Entity Encoder**: Encode/Decode special characters to HTML entities safely.
 
 ### 🔐 Security & Encoding
 - **JWT Decoder**: Decode JSON Web Tokens (JWT) to inspect headers and payloads securely on the client side.
 - **Base64 Converter**: Encode and decode text or files to Base64 format in real-time.
 - **Hash Generator**: Generate secure **MD5**, **SHA-1**, **SHA-256**, and **SHA-512** hashes instantly.
 - **URL Encoder/Decoder**: Safely encode or decode URL strings for debugging query parameters.
+- **Password Generator**: Create strong, secure passwords with customizable length and character sets.
 
 ### 🧪 Testing & Debugging
 - **API Test**: A lightweight Postman alternative to test REST APIs (GET, POST, PUT, DELETE) directly from your browser.
@@ -28,6 +30,7 @@ Access 15+ powerful tools to streamline your development workflow:
 - **Color Converter**: Convert colors between **HEX**, **RGB**, and **HSL** formats with a live preview.
 - **Image Converter**: Optimize and convert images (PNG/JPG) to **WebP**, **JPEG**, or **PNG** with adjustable quality.
 - **QR Code Generator**: Create downloadable QR codes for URLs or text instantly.
+- **Meta Tag Generator**: Generate SEO-friendly HTML meta tags for social media and search engines.
 
 ### 📝 Utilities
 - **Markdown Previewer**: Write Markdown with a live split-screen HTML preview.
@@ -35,6 +38,10 @@ Access 15+ powerful tools to streamline your development workflow:
 - **UUID Generator**: Generate bulk UUID v4 strings for database seeding or testing.
 - **Lorem Ipsum Generator**: Create dummy text (paragraphs, sentences, words) for UI prototyping.
 - **String Length Counter**: Analyze text statistics including character count, word count, lines, and paragraphs.
+
+### ⚙️ System & DevOps
+- **Chmod Calculator**: Visual permission calculator for Linux/Unix file systems (Octal & Symbolic).
+- **Cron Generator**: Easy-to-use UI for generating complex Cron schedule expressions.
 
 ## 🛠️ Tech Stack
 

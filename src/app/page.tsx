@@ -115,6 +115,36 @@ export default function Home() {
             String Counter
           </button>
         </Link>
+
+        <Link href="/chmod-calculator" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            Chmod Calculator
+          </button>
+        </Link>
+
+        <Link href="/cron-generator" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            Cron Generator
+          </button>
+        </Link>
+
+        <Link href="/html-entity" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            HTML Entity Encoder
+          </button>
+        </Link>
+
+        <Link href="/meta-tag-generator" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            Meta Tag Generator
+          </button>
+        </Link>
+
+        <Link href="/password-generator" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            Password Generator
+          </button>
+        </Link>
       </main>
     </div>
   );
