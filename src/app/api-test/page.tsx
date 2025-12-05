@@ -5,11 +5,12 @@ import Link from "next/link";
 import Editor from "@monaco-editor/react";
 import { saveRequest, getAllRequests, deleteRequest, ApiRequest } from "@/lib/db";
 import { useToast, ToastContainer } from "@/components/ui/toast";
+import { isDesktopApp } from "@/lib/env";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS";
 
 export default function ApiTest() {
-    const [requestId, setRequestId] = useState<string>(crypto.randomUUID());
+    const [requestId, setRequestId] = useState<string>("");
     const [requestName, setRequestName] = useState("New Request");
     const [url, setUrl] = useState("");
     const [method, setMethod] = useState<HttpMethod>("GET");
@@ -20,11 +21,18 @@ export default function ApiTest() {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<"body" | "headers">("body");
     const [savedRequests, setSavedRequests] = useState<ApiRequest[]>([]);
+    const [isDesktop, setIsDesktop] = useState(false);
 
     const { toasts, addToast, removeToast } = useToast();
 
     useEffect(() => {
+        setRequestId(crypto.randomUUID());
         loadSavedRequests();
+        const desktop = isDesktopApp();
+        setIsDesktop(desktop);
+        if (desktop) {
+            setMode("client");
+        }
     }, []);
 
     const loadSavedRequests = async () => {
@@ -64,7 +72,12 @@ export default function ApiTest() {
         setRequestName(req.name);
         setUrl(req.url);
         setMethod(req.method as HttpMethod);
-        setMode(req.mode);
+        // Force client mode if desktop, otherwise use saved mode
+        if (isDesktopApp()) {
+            setMode("client");
+        } else {
+            setMode(req.mode);
+        }
         setHeaders(req.headers);
         setBody(req.body);
         setResponse(req.response);
@@ -212,14 +225,14 @@ export default function ApiTest() {
                             key={req.id}
                             onClick={() => handleLoadRequest(req)}
                             className={`flex-shrink-0 cursor-pointer rounded-lg border px-3 py-2 text-sm transition-all ${requestId === req.id
-                                    ? "bg-zinc-800 border-zinc-600 text-white"
-                                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                                ? "bg-zinc-800 border-zinc-600 text-white"
+                                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700"
                                 }`}
                         >
                             <div className="flex items-center gap-2">
                                 <span className={`font-bold text-xs ${req.method === "GET" ? "text-green-400" :
-                                        req.method === "POST" ? "text-blue-400" :
-                                            req.method === "DELETE" ? "text-red-400" : "text-yellow-400"
+                                    req.method === "POST" ? "text-blue-400" :
+                                        req.method === "DELETE" ? "text-red-400" : "text-yellow-400"
                                     }`}>{req.method}</span>
                                 <span className="truncate max-w-[100px]">{req.name}</span>
                                 <button
@@ -285,32 +298,34 @@ export default function ApiTest() {
                         </button>
                     </div>
 
-                    {/* Mode Selection */}
-                    <div className="flex items-center gap-4 rounded-lg bg-zinc-900/50 p-3 border border-zinc-800/50">
-                        <span className="text-sm font-medium text-zinc-400">Request Mode:</span>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="radio"
-                                name="mode"
-                                value="server"
-                                checked={mode === "server"}
-                                onChange={() => setMode("server")}
-                                className="accent-zinc-100"
-                            />
-                            <span className="text-sm text-zinc-300">Server (Proxy)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="radio"
-                                name="mode"
-                                value="client"
-                                checked={mode === "client"}
-                                onChange={() => setMode("client")}
-                                className="accent-zinc-100"
-                            />
-                            <span className="text-sm text-zinc-300">Client (Browser)</span>
-                        </label>
-                    </div>
+                    {/* Mode Selection - Only show if NOT desktop */}
+                    {!isDesktop && (
+                        <div className="flex items-center gap-4 rounded-lg bg-zinc-900/50 p-3 border border-zinc-800/50">
+                            <span className="text-sm font-medium text-zinc-400">Request Mode:</span>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="mode"
+                                    value="server"
+                                    checked={mode === "server"}
+                                    onChange={() => setMode("server")}
+                                    className="accent-zinc-100"
+                                />
+                                <span className="text-sm text-zinc-300">Server (Proxy)</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="mode"
+                                    value="client"
+                                    checked={mode === "client"}
+                                    onChange={() => setMode("client")}
+                                    className="accent-zinc-100"
+                                />
+                                <span className="text-sm text-zinc-300">Client (Browser)</span>
+                            </label>
+                        </div>
+                    )}
 
                     {/* Tabs: Body & Headers */}
                     <div className="flex flex-col flex-grow rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
