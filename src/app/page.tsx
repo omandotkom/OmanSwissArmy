@@ -151,6 +151,12 @@ export default function Home() {
             Encrypt / Decrypt
           </button>
         </Link>
+
+        <Link href="/deploy-db" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            Deploy Oracle Object DB
+          </button>
+        </Link>
       </main>
     </div>
   );
