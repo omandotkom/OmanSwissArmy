@@ -3,11 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 
+interface Match {
+    index: number;
+    value: string;
+    groups: string[];
+}
+
 export default function RegexTester() {
     const [regex, setRegex] = useState("");
     const [flags, setFlags] = useState("g");
     const [text, setText] = useState("");
-    const [matches, setMatches] = useState<any[]>([]);
+    const [matches, setMatches] = useState<Match[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [explanation, setExplanation] = useState<{ token: string; meaning: string }[]>([]);
 
@@ -67,7 +73,7 @@ export default function RegexTester() {
 
         try {
             const re = new RegExp(currentRegex, currentFlags);
-            const newMatches = [];
+            const newMatches: Match[] = [];
             let match;
 
             // Prevent infinite loops with empty matches
@@ -95,8 +101,9 @@ export default function RegexTester() {
                 }
             }
             setMatches(newMatches);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e) {
+            const error = e as Error;
+            setError(error.message);
             setMatches([]);
         }
     };

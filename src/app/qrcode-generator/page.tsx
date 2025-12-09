@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function QrCodeGenerator() {
     const [text, setText] = useState("");
@@ -53,7 +54,7 @@ export default function QrCodeGenerator() {
 
                 {qrUrl && (
                     <div className="flex flex-col items-center gap-4 p-6 rounded-xl bg-white border border-zinc-800">
-                        <img src={qrUrl} alt="QR Code" className="w-[300px] h-[300px]" />
+                        <Image src={qrUrl} alt="QR Code" width={300} height={300} />
                         <a
                             href={qrUrl}
                             download="qrcode.png"

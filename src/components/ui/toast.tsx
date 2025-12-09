@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 
 export interface Toast {
     id: string;
@@ -11,17 +11,17 @@ export interface Toast {
 export const useToast = () => {
     const [toasts, setToasts] = useState<Toast[]>([]);
 
-    const addToast = (message: string, type: "success" | "error" = "success") => {
+    const removeToast = useCallback((id: string) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, []);
+
+    const addToast = useCallback((message: string, type: "success" | "error" = "success") => {
         const id = crypto.randomUUID();
         setToasts((prev) => [...prev, { id, message, type }]);
         setTimeout(() => {
             removeToast(id);
         }, 3000);
-    };
-
-    const removeToast = (id: string) => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-    };
+    }, [removeToast]);
 
     return { toasts, addToast, removeToast };
 };

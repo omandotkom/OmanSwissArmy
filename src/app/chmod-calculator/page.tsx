@@ -1,32 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
 export default function ChmodCalculator() {
+    type PermissionSet = { read: boolean; write: boolean; execute: boolean; };
+
     const [permissions, setPermissions] = useState({
         owner: { read: true, write: true, execute: true },
         group: { read: true, write: false, execute: true },
         public: { read: true, write: false, execute: true },
     });
-    const [octal, setOctal] = useState("755");
-    const [symbolic, setSymbolic] = useState("-rwxr-xr-x");
 
-    useEffect(() => {
-        calculate();
-    }, [permissions]);
+    const getVal = (p: PermissionSet) => (p.read ? 4 : 0) + (p.write ? 2 : 0) + (p.execute ? 1 : 0);
+    const o = getVal(permissions.owner);
+    const g = getVal(permissions.group);
+    const p = getVal(permissions.public);
+    const octal = `${o}${g}${p}`;
 
-    const calculate = () => {
-        const getVal = (p: any) => (p.read ? 4 : 0) + (p.write ? 2 : 0) + (p.execute ? 1 : 0);
-        const o = getVal(permissions.owner);
-        const g = getVal(permissions.group);
-        const p = getVal(permissions.public);
-
-        setOctal(`${o}${g}${p}`);
-
-        const getSym = (p: any) => `${p.read ? "r" : "-"}${p.write ? "w" : "-"}${p.execute ? "x" : "-"}`;
-        setSymbolic(`-${getSym(permissions.owner)}${getSym(permissions.group)}${getSym(permissions.public)}`);
-    };
+    const getSym = (p: PermissionSet) => `${p.read ? "r" : "-"}${p.write ? "w" : "-"}${p.execute ? "x" : "-"}`;
+    const symbolic = `-${getSym(permissions.owner)}${getSym(permissions.group)}${getSym(permissions.public)}`;
 
     const toggle = (role: "owner" | "group" | "public", type: "read" | "write" | "execute") => {
         setPermissions(prev => ({

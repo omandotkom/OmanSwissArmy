@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import Editor, { OnMount } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 
 // Fallback formatter since npm install failed
 const formatSql = (sql: string) => {
@@ -59,9 +60,9 @@ const formatSql = (sql: string) => {
 export default function SqlFormatter() {
     const [sqlInput, setSqlInput] = useState("");
     const [error, setError] = useState<string | null>(null);
-    const editorRef = useRef<any>(null);
+    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
-    const handleEditorDidMount: OnMount = (editor, monaco) => {
+    const handleEditorDidMount: OnMount = (editor) => {
         editorRef.current = editor;
     };
 
@@ -75,8 +76,9 @@ export default function SqlFormatter() {
             const formatted = formatSql(sqlInput);
             setSqlInput(formatted);
             setError(null);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            const error = err as Error;
+            setError(error.message);
         }
     };
 

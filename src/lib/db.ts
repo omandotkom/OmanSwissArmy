@@ -9,7 +9,7 @@ export interface ApiRequest {
     mode: "server" | "client";
     headers: string;
     body: string;
-    response?: any;
+    response?: unknown;
     createdAt: number;
 }
 

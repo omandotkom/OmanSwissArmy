@@ -1,42 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 export default function TimestampConverter() {
-    const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+    const [now, setNow] = useState(0);
     const [timestamp, setTimestamp] = useState<string>("");
     const [dateStr, setDateStr] = useState<string>("");
     const [format, setFormat] = useState<"seconds" | "milliseconds">("seconds");
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setNow(Math.floor(Date.now() / 1000));
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // Initialize with current time
-    useEffect(() => {
-        const current = Math.floor(Date.now() / 1000);
-        setTimestamp(current.toString());
-        handleTimestampChange(current.toString(), "seconds");
-    }, []);
-
-    const handleTimestampChange = (val: string, fmt = format) => {
+    const handleTimestampChange = useCallback((val: string, fmt = format) => {
         setTimestamp(val);
         const ts = parseInt(val);
         if (!isNaN(ts)) {
             const date = new Date(fmt === "seconds" ? ts * 1000 : ts);
-            // Format to datetime-local string: YYYY-MM-DDTHH:mm:ss
             const iso = date.toISOString().slice(0, 19);
             setDateStr(iso);
         } else {
             setDateStr("");
         }
-    };
+    }, [format]);
 
-    const handleDateChange = (val: string) => {
+    const handleDateChange = useCallback((val: string) => {
         setDateStr(val);
         const date = new Date(val);
         if (!isNaN(date.getTime())) {
@@ -45,12 +30,30 @@ export default function TimestampConverter() {
         } else {
             setTimestamp("");
         }
-    };
+    }, [format]);
+
+    useEffect(() => {
+        const initialNow = Math.floor(Date.now() / 1000);
+        setNow(initialNow);
+        
+        const initialTs = initialNow.toString();
+        setTimestamp(initialTs);
+        const date = new Date(initialNow * 1000);
+        const iso = date.toISOString().slice(0, 19);
+        setDateStr(iso);
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setNow(Math.floor(Date.now() / 1000));
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
     const toggleFormat = () => {
         const newFormat = format === "seconds" ? "milliseconds" : "seconds";
         setFormat(newFormat);
-        // Re-calculate timestamp based on current dateStr
         if (dateStr) {
             const date = new Date(dateStr);
             if (!isNaN(date.getTime())) {

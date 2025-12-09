@@ -21,7 +21,7 @@ export default function LoremIpsum() {
     const [text, setText] = useState("");
 
     const generate = () => {
-        let result = [];
+        const result: string[] = [];
 
         if (type === "words") {
             for (let i = 0; i < count; i++) {
@@ -31,7 +31,7 @@ export default function LoremIpsum() {
         } else if (type === "sentences") {
             for (let i = 0; i < count; i++) {
                 const sentenceLength = Math.floor(Math.random() * 10) + 5;
-                let sentence = [];
+                const sentence: string[] = [];
                 for (let j = 0; j < sentenceLength; j++) {
                     sentence.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
                 }
@@ -45,10 +45,10 @@ export default function LoremIpsum() {
             // Paragraphs
             for (let i = 0; i < count; i++) {
                 const numSentences = Math.floor(Math.random() * 5) + 3;
-                let paragraph = [];
+                const paragraph: string[] = [];
                 for (let k = 0; k < numSentences; k++) {
                     const sentenceLength = Math.floor(Math.random() * 10) + 5;
-                    let sentence = [];
+                    const sentence: string[] = [];
                     for (let j = 0; j < sentenceLength; j++) {
                         sentence.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
                     }
@@ -98,7 +98,7 @@ export default function LoremIpsum() {
                         <label className="text-sm font-medium text-zinc-400">Type</label>
                         <select
                             value={type}
-                            onChange={(e) => setType(e.target.value as any)}
+                            onChange={(e) => setType(e.target.value as "paragraphs" | "sentences" | "words")}
                             className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-4 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600"
                         >
                             <option value="paragraphs">Paragraphs</option>

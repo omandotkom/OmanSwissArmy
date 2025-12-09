@@ -3,13 +3,14 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import Editor, { OnMount } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 
 export default function JsonFormatter() {
     const [jsonInput, setJsonInput] = useState("");
     const [error, setError] = useState<string | null>(null);
-    const editorRef = useRef<any>(null);
+    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
-    const handleEditorDidMount: OnMount = (editor, monaco) => {
+    const handleEditorDidMount: OnMount = (editor) => {
         editorRef.current = editor;
     };
 
@@ -23,8 +24,9 @@ export default function JsonFormatter() {
             const formatted = JSON.stringify(parsed, null, 2);
             setJsonInput(formatted);
             setError(null);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            const error = err as Error;
+            setError(error.message);
         }
     };
 

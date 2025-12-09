@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function ImageConverter() {
     const [image, setImage] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function ImageConverter() {
     const processImage = () => {
         if (!image) return;
 
-        const img = new Image();
+        const img = new window.Image();
         img.src = image;
         img.onload = () => {
             const canvas = document.createElement("canvas");
@@ -81,7 +82,7 @@ export default function ImageConverter() {
                         <label className="text-sm font-medium text-zinc-400">Format</label>
                         <select
                             value={format}
-                            onChange={(e) => setFormat(e.target.value as any)}
+                            onChange={(e) => setFormat(e.target.value as "image/webp" | "image/jpeg" | "image/png")}
                             className="rounded-lg bg-zinc-950 border border-zinc-800 px-4 py-2 text-zinc-200 focus:outline-none focus:border-zinc-600"
                         >
                             <option value="image/webp">WebP (Best Compression)</option>
@@ -120,7 +121,7 @@ export default function ImageConverter() {
                         <div className="flex-1 flex flex-col gap-2">
                             <h2 className="text-sm font-medium text-zinc-400">Original</h2>
                             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-2 flex items-center justify-center min-h-[300px]">
-                                <img src={image} alt="Original" className="max-w-full max-h-[400px] object-contain" />
+                                <Image src={image} alt="Original" width={400} height={400} className="max-w-full max-h-[400px] object-contain" />
                             </div>
                         </div>
                     )}
@@ -137,7 +138,7 @@ export default function ImageConverter() {
                                 </button>
                             </div>
                             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-2 flex items-center justify-center min-h-[300px]">
-                                <img src={convertedImage} alt="Converted" className="max-w-full max-h-[400px] object-contain" />
+                                <Image src={convertedImage} alt="Converted" width={400} height={400} className="max-w-full max-h-[400px] object-contain" />
                             </div>
                         </div>
                     )}

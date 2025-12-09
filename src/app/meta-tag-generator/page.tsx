@@ -14,10 +14,8 @@ export default function MetaTagGenerator() {
         ogUrl: "",
         twitterCard: "summary_large_image"
     });
-    const [code, setCode] = useState("");
 
-    useEffect(() => {
-        const generated = `
+    const generatedCode = `
 <!-- Primary Meta Tags -->
 <title>${meta.title}</title>
 <meta name="title" content="${meta.title}" />
@@ -39,8 +37,6 @@ export default function MetaTagGenerator() {
 <meta property="twitter:description" content="${meta.description}" />
 <meta property="twitter:image" content="${meta.ogImage}" />
     `.trim();
-        setCode(generated);
-    }, [meta]);
 
     const handleChange = (field: keyof typeof meta, value: string) => {
         setMeta(prev => ({ ...prev, [field]: value }));
@@ -136,7 +132,7 @@ export default function MetaTagGenerator() {
                             height="100%"
                             defaultLanguage="html"
                             theme="vs-dark"
-                            value={code}
+                            value={generatedCode}
                             options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, padding: { top: 16 }, wordWrap: "on" }}
                         />
                     </div>

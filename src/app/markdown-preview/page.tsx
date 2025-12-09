@@ -9,7 +9,7 @@ export default function MarkdownPreview() {
 
     // Simple Regex-based Markdown Parser (Zero Dependency)
     const parseMarkdown = (text: string) => {
-        let html = text
+        const html = text
             // Escape HTML
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")

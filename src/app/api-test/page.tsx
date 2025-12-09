@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Editor from "@monaco-editor/react";
 import { saveRequest, getAllRequests, deleteRequest, ApiRequest } from "@/lib/db";
@@ -8,6 +8,15 @@ import { useToast, ToastContainer } from "@/components/ui/toast";
 import { isDesktopApp } from "@/lib/env";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS";
+
+interface ResponseData {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    data: unknown;
+    time?: number;
+    error?: string;
+}
 
 export default function ApiTest() {
     const [requestId, setRequestId] = useState<string>("");
@@ -17,13 +26,23 @@ export default function ApiTest() {
     const [mode, setMode] = useState<"server" | "client">("server");
     const [headers, setHeaders] = useState("{\n  \"Content-Type\": \"application/json\"\n}");
     const [body, setBody] = useState("");
-    const [response, setResponse] = useState<any>(null);
+    const [response, setResponse] = useState<ResponseData | null>(null);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<"body" | "headers">("body");
     const [savedRequests, setSavedRequests] = useState<ApiRequest[]>([]);
     const [isDesktop, setIsDesktop] = useState(false);
 
     const { toasts, addToast, removeToast } = useToast();
+
+    const loadSavedRequests = useCallback(async () => {
+        try {
+            const requests = await getAllRequests();
+            setSavedRequests(requests);
+        } catch (error) {
+            console.error("Failed to load requests", error);
+            addToast("Failed to load requests", "error");
+        }
+    }, [addToast]);
 
     useEffect(() => {
         setRequestId(crypto.randomUUID());
@@ -33,17 +52,7 @@ export default function ApiTest() {
         if (desktop) {
             setMode("client");
         }
-    }, []);
-
-    const loadSavedRequests = async () => {
-        try {
-            const requests = await getAllRequests();
-            setSavedRequests(requests);
-        } catch (error) {
-            console.error("Failed to load requests", error);
-            addToast("Failed to load requests", "error");
-        }
-    };
+    }, [loadSavedRequests]);
 
     const handleSave = async () => {
         try {
@@ -55,7 +64,6 @@ export default function ApiTest() {
                 mode,
                 headers,
                 body,
-                response,
                 createdAt: Date.now(),
             };
             await saveRequest(requestData);
@@ -80,11 +88,10 @@ export default function ApiTest() {
         }
         setHeaders(req.headers);
         setBody(req.body);
-        setResponse(req.response);
+        setResponse(req.response || null);
     };
 
-    const handleDeleteRequest = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
+    const handleDeleteRequest = async (id: string) => {
         if (confirm("Are you sure you want to delete this request?")) {
             await deleteRequest(id);
             await loadSavedRequests();
@@ -115,10 +122,10 @@ export default function ApiTest() {
         const startTime = performance.now();
 
         try {
-            let parsedHeaders = {};
+            let parsedHeaders: Record<string, string> = {};
             try {
                 parsedHeaders = JSON.parse(headers);
-            } catch (e) {
+            } catch (err) {
                 addToast("Invalid Headers JSON", "error");
                 setLoading(false);
                 return;
@@ -126,8 +133,8 @@ export default function ApiTest() {
 
             let resStatus = 0;
             let resStatusText = "";
-            let resHeaders = {};
-            let resData: any = null;
+            let resHeaders: Record<string, string> = {};
+            let resData: unknown = null;
 
             if (mode === "server") {
                 // Server Mode (Proxy)
@@ -184,11 +191,14 @@ export default function ApiTest() {
                 time: Math.round(endTime - startTime),
             });
 
-        } catch (err: any) {
+        } catch (err) {
+            const error = err as Error;
             setResponse({
-                error: err.message,
+                error: error.message,
                 status: 0,
                 statusText: "Error",
+                headers: {},
+                data: null,
             });
         } finally {
             setLoading(false);
@@ -236,7 +246,10 @@ export default function ApiTest() {
                                     }`}>{req.method}</span>
                                 <span className="truncate max-w-[100px]">{req.name}</span>
                                 <button
-                                    onClick={(e) => handleDeleteRequest(e, req.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteRequest(req.id);
+                                    }}
                                     className="ml-1 text-zinc-600 hover:text-red-400"
                                 >
                                     ×

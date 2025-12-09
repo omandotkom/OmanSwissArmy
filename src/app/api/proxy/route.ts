@@ -50,9 +50,10 @@ export async function POST(req: NextRequest) {
             data: responseData,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as Error;
         return NextResponse.json({
-            error: error.message,
+            error: err.message,
             status: 500,
             statusText: 'Internal Server Error'
         }, { status: 500 });
