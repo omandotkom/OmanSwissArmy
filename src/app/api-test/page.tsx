@@ -88,7 +88,7 @@ export default function ApiTest() {
         }
         setHeaders(req.headers);
         setBody(req.body);
-        setResponse(req.response || null);
+        setResponse((req.response as ResponseData) || null);
     };
 
     const handleDeleteRequest = async (id: string) => {
