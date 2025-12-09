@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Upload, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, Upload, FileSpreadsheet, Database, ArrowRight, Settings2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import ConnectionManager from "@/components/ConnectionManager";
+import { OracleConnection } from "@/services/connection-storage";
 
 interface ExcelRow {
     [key: string]: any;
@@ -22,6 +24,27 @@ export default function DeployOracleDB() {
     const [activeTab, setActiveTab] = useState<number>(0);
     const [selectedRows, setSelectedRows] = useState<{ [sheetName: string]: Set<number> }>({});
     const [filters, setFilters] = useState<{ [key: string]: string }>({});
+
+    // Connection Manager Interaction State
+    const [isConnManagerOpen, setIsConnManagerOpen] = useState(false);
+    const [selectingFor, setSelectingFor] = useState<"source" | "target" | null>(null);
+    const [sourceConn, setSourceConn] = useState<OracleConnection | null>(null);
+    const [targetConn, setTargetConn] = useState<OracleConnection | null>(null);
+
+    const openConnManager = (type: "source" | "target") => {
+        setSelectingFor(type);
+        setIsConnManagerOpen(true);
+    };
+
+    const handleConnSelect = (conn: OracleConnection) => {
+        if (selectingFor === "source") {
+            setSourceConn(conn);
+        } else {
+            setTargetConn(conn);
+        }
+        setSelectingFor(null);
+        setIsConnManagerOpen(false);
+    };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const uploadedFile = e.target.files?.[0];
@@ -117,7 +140,6 @@ export default function DeployOracleDB() {
         const currentSheet = sheets.find((s) => s.name === sheetName);
         if (!currentSheet) return;
 
-        // Use filtered data for select all, not raw data
         const currentFiltered = getFilteredData();
         if (currentFiltered.length === 0) return;
 
@@ -129,13 +151,11 @@ export default function DeployOracleDB() {
         });
 
         if (allFilteredAreSelected) {
-            // Deselect current filtered rows
             currentFiltered.forEach(row => {
                 const idx = currentSheet.data.indexOf(row);
                 newSelection.delete(idx);
             });
         } else {
-            // Select all current filtered rows
             currentFiltered.forEach(row => {
                 const idx = currentSheet.data.indexOf(row);
                 newSelection.add(idx);
@@ -168,16 +188,72 @@ export default function DeployOracleDB() {
                     <h1 className="text-3xl font-light tracking-wide">Deploy Oracle Object DB</h1>
                 </div>
 
-                {/* Upload Section */}
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 mb-8 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                        <div className="bg-zinc-800 p-4 rounded-full mb-4">
-                            <FileSpreadsheet className="w-8 h-8 text-zinc-400" />
+                {/* Configurations Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+
+                    {/* Database Selection Card */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                        <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
+                            <Database className="w-5 h-5 text-blue-500" />
+                            Database Connections
+                        </h2>
+
+                        <div className="flex items-center gap-4">
+                            {/* Source DB */}
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-zinc-400 mb-2">SOURCE (Development)</label>
+                                <button
+                                    onClick={() => openConnManager("source")}
+                                    className="w-full bg-zinc-950 border border-zinc-700 hover:border-blue-500 rounded-lg p-3 text-left transition-all group relative"
+                                >
+                                    {sourceConn ? (
+                                        <div>
+                                            <div className="font-medium text-zinc-200">{sourceConn.name}</div>
+                                            <div className="text-xs text-zinc-500">{sourceConn.username}@{sourceConn.host}</div>
+                                        </div>
+                                    ) : (
+                                        <span className="text-zinc-500 italic">Select Source DB...</span>
+                                    )}
+                                    <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-blue-500">
+                                        <Settings2 className="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
+
+                            <ArrowRight className="w-6 h-6 text-zinc-600 mt-6" />
+
+                            {/* Target DB */}
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-zinc-400 mb-2">TARGET (QA/Prod)</label>
+                                <button
+                                    onClick={() => openConnManager("target")}
+                                    className="w-full bg-zinc-950 border border-zinc-700 hover:border-green-500 rounded-lg p-3 text-left transition-all group relative"
+                                >
+                                    {targetConn ? (
+                                        <div>
+                                            <div className="font-medium text-zinc-200">{targetConn.name}</div>
+                                            <div className="text-xs text-zinc-500">{targetConn.username}@{targetConn.host}</div>
+                                        </div>
+                                    ) : (
+                                        <span className="text-zinc-500 italic">Select Target DB...</span>
+                                    )}
+                                    <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-green-500">
+                                        <Settings2 className="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
                         </div>
-                        <label htmlFor="file-upload" className="cursor-pointer group relative">
-                            <span className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2">
+                    </div>
+
+                    {/* File Upload Card */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex flex-col items-center justify-center text-center">
+                        <div className="bg-zinc-800 p-3 rounded-full mb-3">
+                            <FileSpreadsheet className="w-6 h-6 text-zinc-400" />
+                        </div>
+                        <label htmlFor="file-upload" className="cursor-pointer group relative w-full max-w-xs">
+                            <span className="bg-blue-600 hover:bg-blue-500 text-white w-full py-2 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
                                 <Upload className="w-4 h-4" />
-                                {file ? "Change File" : "Upload Excel File"}
+                                {file ? "Change Excel File" : "Upload Object List (.xlsx)"}
                             </span>
                             <input
                                 id="file-upload"
@@ -187,7 +263,7 @@ export default function DeployOracleDB() {
                                 onChange={handleFileUpload}
                             />
                         </label>
-                        {file && <p className="mt-4 text-zinc-400 text-sm">Selected: {file.name}</p>}
+                        {file && <p className="mt-3 text-zinc-400 text-sm">Selected: <span className="text-zinc-200 font-medium">{file.name}</span></p>}
                     </div>
                 </div>
 
@@ -201,7 +277,7 @@ export default function DeployOracleDB() {
 
                 {/* Data Preview */}
                 {!isLoading && sheets.length > 0 && (
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
                         {/* Tabs */}
                         <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-950/50">
                             {sheets.map((sheet, idx) => (
@@ -246,8 +322,8 @@ export default function DeployOracleDB() {
                                                             <span>{header}</span>
                                                             <input
                                                                 type="text"
-                                                                placeholder={`Filter ${header}...`}
-                                                                className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full font-normal normal-case"
+                                                                placeholder={`Filter...`}
+                                                                className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-[10px] rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full font-normal normal-case"
                                                                 value={filters[`${sheets[activeTab].name}-${header}`] || ""}
                                                                 onChange={(e) => handleFilterChange(header, e.target.value)}
                                                             />
@@ -290,6 +366,22 @@ export default function DeployOracleDB() {
                         </div>
                     </div>
                 )}
+
+                {/* Deploy Button (Floating) */}
+                {!isLoading && sheets.length > 0 && sourceConn && targetConn && (
+                    <div className="fixed bottom-8 right-8 z-40">
+                        <button className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-green-900/40 flex items-center gap-3 transition-transform hover:scale-105 active:scale-95">
+                            <Database className="w-5 h-5" />
+                            START DEPLOYMENT
+                        </button>
+                    </div>
+                )}
+
+                <ConnectionManager
+                    isOpen={isConnManagerOpen}
+                    onClose={() => setIsConnManagerOpen(false)}
+                    onSelect={handleConnSelect}
+                />
             </div>
         </div>
     );
