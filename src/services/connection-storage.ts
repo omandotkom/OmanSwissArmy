@@ -37,19 +37,27 @@ export const initDB = (): Promise<IDBDatabase> => {
     });
 };
 
+// Encrypted Storage Wrapper
+interface EncryptedStorageItem {
+    id: string;
+    payload: string; // The entire encrypted connection object
+}
+
 export const saveConnection = async (connection: OracleConnection): Promise<void> => {
     const db = await initDB();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
 
-        // Encrypt password before saving
-        const dataToSave = { ...connection };
-        if (dataToSave.password) {
-            dataToSave.password = encryptData(dataToSave.password);
-        }
+        // Encrypt the ENTIRE object
+        const encryptedPayload = encryptData(connection);
 
-        const request = store.put(dataToSave);
+        const itemToSave: EncryptedStorageItem = {
+            id: connection.id,
+            payload: encryptedPayload
+        };
+
+        const request = store.put(itemToSave);
 
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
@@ -64,14 +72,27 @@ export const getAllConnections = async (): Promise<OracleConnection[]> => {
         const request = store.getAll();
 
         request.onsuccess = () => {
-            const connections = request.result.map((conn: OracleConnection) => {
-                // Decrypt password on retrieval
-                if (conn.password) {
-                    conn.password = decryptData(conn.password);
+            const results: OracleConnection[] = [];
+
+            request.result.forEach((item: any) => {
+                // Check if it's the new encrypted format or old format (migration handling)
+                if (item.payload && typeof item.payload === 'string') {
+                    // New Format: Decrypt full payload
+                    const decrypted = decryptData(item.payload);
+                    if (decrypted) {
+                        results.push(decrypted);
+                    }
+                } else {
+                    // Legacy Format (Old Data): Decrypt password only if exists, and migrate later implicitly on save
+                    const legacyConn = item as OracleConnection;
+                    if (legacyConn.password) {
+                        legacyConn.password = decryptData(legacyConn.password);
+                    }
+                    results.push(legacyConn);
                 }
-                return conn;
             });
-            resolve(connections);
+
+            resolve(results);
         };
         request.onerror = () => reject(request.error);
     });
