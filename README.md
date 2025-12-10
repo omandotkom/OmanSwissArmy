@@ -8,7 +8,11 @@ Oman Swiss Army Tool is a comprehensive, all-in-one web application designed to 
 
 Access 20+ powerful tools to streamline your development workflow:
 
-### ☸️ OpenShift / Kubernetes (New!)
+### ☁️ Cloud, Storage & Infrastructure
+- **S3 Browser**: GUI Client for any S3-compatible storage (AWS S3, MinIO, OpenShift OCS).
+    - **Multi-Cloud**: Connect to AWS, local MinIO, or on-prem Object Storage.
+    - **Bucket & File Explorer**: Browse buckets, folders, and files seamlessly.
+    - **Direct Download**: Securely download files using presigned URLs.
 - **PVC Browser**: A robust file manager for your OpenShift Persistent Volume Claims.
     - **Pod & Mount Explorer**: Browse files inside Pods and PVC mount points directly from the UI.
     - **PVC Insights**: Auto-detect PVC backed mounts and display details (Storage Class, Capacity, Status).

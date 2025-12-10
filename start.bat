@@ -29,6 +29,9 @@ echo.
 echo [+] First run detected. Installing dependencies...
 echo     (This may take a few minutes)
 echo.
+echo.
+REM Use custom registry if behind corporate firewall:
+REM call npm install --registry=https://nexus.apps.ocp.sm.co.id/repository/npm-proxy
 call npm install
 if %errorlevel% neq 0 (
     echo.

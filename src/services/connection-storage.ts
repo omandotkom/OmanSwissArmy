@@ -1,8 +1,9 @@
 import { encryptData, decryptData } from '@/lib/crypto-utils';
 
 const DB_NAME = 'OmanSwissArmyDB';
-const STORE_NAME = 'oracle_connections';
-const DB_VERSION = 1;
+const STORE_ORACLE = 'oracle_connections';
+const STORE_S3 = 's3_connections';
+const DB_VERSION = 2; // Bump version for S3 Store
 
 export interface OracleConnection {
     id: string; // uuid
@@ -13,6 +14,20 @@ export interface OracleConnection {
     username: string;
     password?: string; // Optional, encrypted when stored
     color?: string; // Visual tag
+}
+
+export interface S3ConnectionProfile {
+    id: string;
+    name: string;
+    config: {
+        endpoint: string;
+        region: string;
+        accessKeyId: string;
+        secretAccessKey: string;
+    };
+    manualBuckets: any[];
+    capacities: Record<string, number>;
+    lastUsed: number;
 }
 
 export const initDB = (): Promise<IDBDatabase> => {
@@ -30,8 +45,11 @@ export const initDB = (): Promise<IDBDatabase> => {
 
         request.onupgradeneeded = (event: any) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            if (!db.objectStoreNames.contains(STORE_ORACLE)) {
+                db.createObjectStore(STORE_ORACLE, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_S3)) {
+                db.createObjectStore(STORE_S3, { keyPath: 'id' });
             }
         };
     });
@@ -43,11 +61,13 @@ interface EncryptedStorageItem {
     payload: string; // The entire encrypted connection object
 }
 
+// --- ORACLE FUNCTIONS ---
+
 export const saveConnection = async (connection: OracleConnection): Promise<void> => {
     const db = await initDB();
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = db.transaction([STORE_ORACLE], 'readwrite');
+        const store = transaction.objectStore(STORE_ORACLE);
 
         // Encrypt the ENTIRE object
         const encryptedPayload = encryptData(connection);
@@ -67,8 +87,8 @@ export const saveConnection = async (connection: OracleConnection): Promise<void
 export const getAllConnections = async (): Promise<OracleConnection[]> => {
     const db = await initDB();
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = db.transaction([STORE_ORACLE], 'readonly');
+        const store = transaction.objectStore(STORE_ORACLE);
         const request = store.getAll();
 
         request.onsuccess = () => {
@@ -83,7 +103,7 @@ export const getAllConnections = async (): Promise<OracleConnection[]> => {
                         results.push(decrypted);
                     }
                 } else {
-                    // Legacy Format (Old Data): Decrypt password only if exists, and migrate later implicitly on save
+                    // Legacy Format (Old Data): Decrypt password only if exists
                     const legacyConn = item as OracleConnection;
                     if (legacyConn.password) {
                         legacyConn.password = decryptData(legacyConn.password);
@@ -101,10 +121,62 @@ export const getAllConnections = async (): Promise<OracleConnection[]> => {
 export const deleteConnection = async (id: string): Promise<void> => {
     const db = await initDB();
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = db.transaction([STORE_ORACLE], 'readwrite');
+        const store = transaction.objectStore(STORE_ORACLE);
         const request = store.delete(id);
 
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+// --- S3 FUNCTIONS ---
+
+export const saveS3Connection = async (profile: S3ConnectionProfile): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_S3], 'readwrite');
+        const store = transaction.objectStore(STORE_S3);
+
+        const encryptedPayload = encryptData(profile);
+        const itemToSave: EncryptedStorageItem = {
+            id: profile.id,
+            payload: encryptedPayload
+        };
+
+        const request = store.put(itemToSave);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const getAllS3Connections = async (): Promise<S3ConnectionProfile[]> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_S3], 'readonly');
+        const store = transaction.objectStore(STORE_S3);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const results: S3ConnectionProfile[] = [];
+            request.result.forEach((item: any) => {
+                if (item.payload && typeof item.payload === 'string') {
+                    const decrypted = decryptData(item.payload);
+                    if (decrypted) results.push(decrypted);
+                }
+            });
+            resolve(results);
+        };
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const deleteS3Connection = async (id: string): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_S3], 'readwrite');
+        const store = transaction.objectStore(STORE_S3);
+        const request = store.delete(id);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
     });

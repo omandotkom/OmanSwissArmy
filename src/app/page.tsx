@@ -163,6 +163,12 @@ export default function Home() {
             PVC Browser
           </button>
         </Link>
+
+        <Link href="/s3-browser" className="block w-full">
+          <button className="group w-full rounded-xl bg-zinc-900 border border-zinc-800 px-6 py-4 text-lg font-medium text-zinc-300 shadow-sm transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 hover:shadow-md active:scale-[0.98]">
+            S3 Browser
+          </button>
+        </Link>
       </main>
     </div>
   );
