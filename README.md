@@ -79,12 +79,11 @@ Access 20+ powerful tools to streamline your development workflow:
     - *Note: Creates the `bin` folder if it doesn't exist.*
 
 4.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
+    - **Option A (Easy):** Double-click `start.bat`.
+    - **Option B (Manual):** Run `npm run dev`.
 
 5.  **Open your browser:**
-    Navigate to `http://localhost:3000` to start using the tools.
+    Navigate to `http://localhost:1998` to start using the tools.
 
 ## 🇮🇩 Panduan Instalasi (Bahasa Indonesia)
 
@@ -111,14 +110,12 @@ Berikut langkah-langkah untuk menjalankan project ini di komputer lokal Anda:
     - *Struktur akhir:* `OmanSwissArmy/bin/oc.exe`
 
 4.  **Jalankan Aplikasi:**
-    Start development server dengan perintah:
-    ```bash
-    npm run dev
-    ```
+    - **Cara Mudah:** Double-click file **`start.bat`**.
+    - **Cara Manual:** Buka terminal dan ketik `npm run dev`.
 
 5.  **Mulai Menggunakan:**
     Buka browser (Chrome/Edge) dan akses alamat:
-    `http://localhost:3000`
+    `http://localhost:1998`
 
 ## 🤝 Contributing
 
