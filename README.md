@@ -86,6 +86,40 @@ Access 20+ powerful tools to streamline your development workflow:
 5.  **Open your browser:**
     Navigate to `http://localhost:3000` to start using the tools.
 
+## 🇮🇩 Panduan Instalasi (Bahasa Indonesia)
+
+Berikut langkah-langkah untuk menjalankan project ini di komputer lokal Anda:
+
+1.  **Download Source Code:**
+    Clone repository ini menggunakan git:
+    ```bash
+    git clone https://github.com/omandotkom/OmanSwissArmy.git
+    cd OmanSwissArmy
+    ```
+
+2.  **Install Library:**
+    Pastikan Anda sudah menginstall Node.js, lalu jalankan:
+    ```bash
+    npm install
+    ```
+
+3.  **Setup OpenShift CLI (PENTING untuk fitur PVC Browser):**
+    Agar fitur **PVC Browser** dan **Storage Finder** dapat berjalan, aplikasi memerlukan binary `oc` (OpenShift CLI).
+    - Download `oc.exe` (CLI Tools) dari portal Red Hat OpenShift Anda.
+    - Buat folder baru bernama **`bin`** di dalam folder utama project ini.
+    - Copy file **`oc.exe`** ke dalam folder `bin` tersebut.
+    - *Struktur akhir:* `OmanSwissArmy/bin/oc.exe`
+
+4.  **Jalankan Aplikasi:**
+    Start development server dengan perintah:
+    ```bash
+    npm run dev
+    ```
+
+5.  **Mulai Menggunakan:**
+    Buka browser (Chrome/Edge) dan akses alamat:
+    `http://localhost:3000`
+
 ## 🤝 Contributing
 
 Contributions are welcome! If you have an idea for a new tool or want to improve an existing one, feel free to open an issue or submit a pull request.
