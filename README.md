@@ -2,11 +2,19 @@
 
 **The Ultimate Developer Utility Suite**
 
-Oman Swiss Army Tool is a comprehensive, all-in-one web application designed to supercharge developer productivity. Built with **Next.js**, **TypeScript**, and **Tailwind CSS**, it provides a collection of essential tools for everyday coding tasks, all in a single, modern, and responsive interface.
+Oman Swiss Army Tool is a comprehensive, all-in-one web application designed to supercharge developer productivity. Built with **Next.js**, **TypeScript**, and **Tailwind CSS**, it provides a collection of essential tools for everyday coding tasks, integrated with backend capabilities for system operations.
 
 ## 🚀 Features
 
 Access 20+ powerful tools to streamline your development workflow:
+
+### ☸️ OpenShift / Kubernetes (New!)
+- **PVC Browser**: A robust file manager for your OpenShift Persistent Volume Claims.
+    - **Pod & Mount Explorer**: Browse files inside Pods and PVC mount points directly from the UI.
+    - **PVC Insights**: Auto-detect PVC backed mounts and display details (Storage Class, Capacity, Status).
+    - **File Operations**: Preview text files and **Download** any file (text/binary) to your local machine.
+    - **Smart Filtering**: Filter Pods by their Storage Class (e.g., find all pods using `gp3` or `px-sc`).
+    - **Storage Finder (px-sc)**: A powerful, realtime cluster scanner to find all workloads using a specific storage class (e.g., Portworx), complete with **Execution Logs** and **Excel Export**.
 
 ### 🔧 Code & Data Formatting
 - **JSON Formatter**: Beautify and validate JSON data instantly with syntax highlighting.
@@ -48,6 +56,7 @@ Access 20+ powerful tools to streamline your development workflow:
 - **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Backend Integration**: Node.js Child Process (for OpenShift CLI integration)
 - **Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/) (VS Code core)
 - **Icons**: [Lucide React](https://lucide.dev/)
 
@@ -64,12 +73,17 @@ Access 20+ powerful tools to streamline your development workflow:
     npm install
     ```
 
-3.  **Run the development server:**
+3.  **Setup OpenShift CLI (Optional, for PVC Browser):**
+    - Download the `oc` binary (OpenShift CLI).
+    - Place `oc.exe` (Windows) or `oc` (Linux/Mac) inside the `bin/` directory in the project root.
+    - *Note: Creates the `bin` folder if it doesn't exist.*
+
+4.  **Run the development server:**
     ```bash
     npm run dev
     ```
 
-4.  **Open your browser:**
+5.  **Open your browser:**
     Navigate to `http://localhost:3000` to start using the tools.
 
 ## 🤝 Contributing

@@ -17,6 +17,13 @@ interface SheetData {
     headers: string[];
 }
 
+interface OwnerMapping {
+    [ownerName: string]: {
+        source: OracleConnection | null;
+        target: OracleConnection | null;
+    }
+}
+
 export default function DeployOracleDB() {
     const [file, setFile] = useState<File | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -25,24 +32,33 @@ export default function DeployOracleDB() {
     const [selectedRows, setSelectedRows] = useState<{ [sheetName: string]: Set<number> }>({});
     const [filters, setFilters] = useState<{ [key: string]: string }>({});
 
+    // Owner & Connection Logic
+    const [detectedOwners, setDetectedOwners] = useState<string[]>([]);
+    const [ownerMappings, setOwnerMappings] = useState<OwnerMapping>({});
+
     // Connection Manager Interaction State
     const [isConnManagerOpen, setIsConnManagerOpen] = useState(false);
-    const [selectingFor, setSelectingFor] = useState<"source" | "target" | null>(null);
-    const [sourceConn, setSourceConn] = useState<OracleConnection | null>(null);
-    const [targetConn, setTargetConn] = useState<OracleConnection | null>(null);
+    const [selectingForOwner, setSelectingForOwner] = useState<string | null>(null);
+    const [selectingForType, setSelectingForType] = useState<"source" | "target" | null>(null);
 
-    const openConnManager = (type: "source" | "target") => {
-        setSelectingFor(type);
+    const openConnManager = (owner: string, type: "source" | "target") => {
+        setSelectingForOwner(owner);
+        setSelectingForType(type);
         setIsConnManagerOpen(true);
     };
 
     const handleConnSelect = (conn: OracleConnection) => {
-        if (selectingFor === "source") {
-            setSourceConn(conn);
-        } else {
-            setTargetConn(conn);
+        if (selectingForOwner && selectingForType) {
+            setOwnerMappings(prev => ({
+                ...prev,
+                [selectingForOwner]: {
+                    ...prev[selectingForOwner],
+                    [selectingForType]: conn
+                }
+            }));
         }
-        setSelectingFor(null);
+        setSelectingForOwner(null);
+        setSelectingForType(null);
         setIsConnManagerOpen(false);
     };
 
@@ -50,7 +66,6 @@ export default function DeployOracleDB() {
         const uploadedFile = e.target.files?.[0];
         if (!uploadedFile) return;
 
-        // Validate file type
         const validTypes = [
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel",
@@ -71,6 +86,7 @@ export default function DeployOracleDB() {
 
                 const loadedSheets: SheetData[] = [];
                 const initialSelections: { [sheetName: string]: Set<number> } = {};
+                const ownersSet = new Set<string>();
 
                 wb.SheetNames.forEach((wsname) => {
                     const ws = wb.Sheets[wsname];
@@ -85,11 +101,28 @@ export default function DeployOracleDB() {
                         });
                         initialSelections[wsname] = new Set();
                     }
+
+                    // Scan for OWNER
+                    data.forEach(row => {
+                        if (row['OWNER']) {
+                            ownersSet.add(String(row['OWNER']).toUpperCase().trim());
+                        }
+                    });
+                });
+
+                // Initialize Mapping
+                const ownersList = Array.from(ownersSet).sort();
+                const initialMapping: OwnerMapping = {};
+                ownersList.forEach(owner => {
+                    initialMapping[owner] = { source: null, target: null };
                 });
 
                 setSheets(loadedSheets);
                 setSelectedRows(initialSelections);
+                setDetectedOwners(ownersList);
+                setOwnerMappings(initialMapping);
                 setActiveTab(0);
+
             } catch (err) {
                 console.error("Error parsing excel", err);
                 alert("Failed to parse Excel file.");
@@ -100,6 +133,7 @@ export default function DeployOracleDB() {
         reader.readAsBinaryString(uploadedFile);
     };
 
+    // Filter & Selection Handlers
     const handleFilterChange = (header: string, value: string) => {
         setFilters((prev) => ({
             ...prev,
@@ -109,7 +143,6 @@ export default function DeployOracleDB() {
 
     const getFilteredData = () => {
         if (!sheets[activeTab]) return [];
-
         const currentSheetName = sheets[activeTab].name;
         const data = sheets[activeTab].data;
 
@@ -117,7 +150,6 @@ export default function DeployOracleDB() {
             return sheets[activeTab].headers.every(header => {
                 const filterValue = filters[`${currentSheetName}-${header}`]?.toLowerCase();
                 if (!filterValue) return true;
-
                 const cellValue = String(row[header] || "").toLowerCase();
                 return cellValue.includes(filterValue);
             });
@@ -143,12 +175,13 @@ export default function DeployOracleDB() {
         const currentFiltered = getFilteredData();
         if (currentFiltered.length === 0) return;
 
-        const newSelection = new Set(selectedRows[sheetName]);
-
+        // Check if ALL filtered rows are currently selected
         const allFilteredAreSelected = currentFiltered.every(row => {
             const originalIndex = currentSheet.data.indexOf(row);
-            return newSelection.has(originalIndex);
+            return selectedRows[sheetName]?.has(originalIndex);
         });
+
+        const newSelection = new Set(selectedRows[sheetName]);
 
         if (allFilteredAreSelected) {
             currentFiltered.forEach(row => {
@@ -168,104 +201,145 @@ export default function DeployOracleDB() {
     const isAllSelected = (sheetName: string) => {
         const currentFiltered = getFilteredData();
         if (currentFiltered.length === 0) return false;
-        const currentSelection = selectedRows[sheetName];
-        if (!currentSelection) return false;
-
         return currentFiltered.every(row => {
             const originalIndex = sheets[activeTab].data.indexOf(row);
-            return currentSelection.has(originalIndex);
+            return selectedRows[sheetName]?.has(originalIndex);
         });
     };
+
+    // Validation: Ready to Deploy?
+    const isReadyToDeploy =
+        file &&
+        detectedOwners.length > 0 &&
+        detectedOwners.every(owner => ownerMappings[owner]?.source && ownerMappings[owner]?.target);
 
     return (
         <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8 font-sans">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center mb-8">
-                    <Link href="/" className="mr-4 p-2 rounded-full hover:bg-zinc-800 transition-colors">
-                        <ArrowLeft className="w-6 h-6" />
-                    </Link>
-                    <h1 className="text-3xl font-light tracking-wide">Deploy Oracle Object DB</h1>
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center">
+                        <Link href="/" className="mr-4 p-2 rounded-full hover:bg-zinc-800 transition-colors">
+                            <ArrowLeft className="w-6 h-6" />
+                        </Link>
+                        <h1 className="text-3xl font-light tracking-wide">Deploy Oracle Object DB</h1>
+                    </div>
+                    <button
+                        onClick={() => setIsConnManagerOpen(true)}
+                        className="flex items-center gap-2 text-zinc-400 hover:text-blue-400 transition-colors bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-800 hover:border-zinc-700"
+                    >
+                        <Settings2 className="w-4 h-4" />
+                        Manage Connections
+                    </button>
                 </div>
 
-                {/* Configurations Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-
-                    {/* Database Selection Card */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-                        <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
-                            <Database className="w-5 h-5 text-blue-500" />
-                            Database Connections
-                        </h2>
-
-                        <div className="flex items-center gap-4">
-                            {/* Source DB */}
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-zinc-400 mb-2">SOURCE (Development)</label>
-                                <button
-                                    onClick={() => openConnManager("source")}
-                                    className="w-full bg-zinc-950 border border-zinc-700 hover:border-blue-500 rounded-lg p-3 text-left transition-all group relative"
-                                >
-                                    {sourceConn ? (
-                                        <div>
-                                            <div className="font-medium text-zinc-200">{sourceConn.name}</div>
-                                            <div className="text-xs text-zinc-500">{sourceConn.username}@{sourceConn.host}</div>
-                                        </div>
-                                    ) : (
-                                        <span className="text-zinc-500 italic">Select Source DB...</span>
-                                    )}
-                                    <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-blue-500">
-                                        <Settings2 className="w-4 h-4" />
-                                    </div>
-                                </button>
+                {/* Upload Section (Shown if no file) */}
+                {!file && (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 mb-8 text-center border-dashed border-2 hover:border-blue-500/50 transition-colors">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="bg-zinc-800 p-4 rounded-full mb-6">
+                                <FileSpreadsheet className="w-12 h-12 text-zinc-400" />
                             </div>
+                            <label htmlFor="file-upload" className="cursor-pointer group relative">
+                                <span className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-full font-medium transition-all inline-flex items-center gap-2 shadow-lg shadow-blue-900/20 text-lg">
+                                    <Upload className="w-5 h-5" />
+                                    Upload Object List Input (.xlsx)
+                                </span>
+                                <input
+                                    id="file-upload"
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    className="hidden"
+                                    onChange={handleFileUpload}
+                                />
+                            </label>
+                            <p className="mt-4 text-zinc-500">Supports standard Oracle Object List format</p>
+                        </div>
+                    </div>
+                )}
 
-                            <ArrowRight className="w-6 h-6 text-zinc-600 mt-6" />
+                {/* Connection Mapping Section (Shown after upload) */}
+                {!isLoading && file && detectedOwners.length > 0 && (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-lg font-medium flex items-center gap-2">
+                                <Database className="w-5 h-5 text-purple-500" />
+                                Connection Mapping
+                                <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-normal">
+                                    {detectedOwners.length} Owner(s) Detected
+                                </span>
+                            </h2>
 
-                            {/* Target DB */}
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-zinc-400 mb-2">TARGET (QA/Prod)</label>
+                            <div className="flex gap-2">
                                 <button
-                                    onClick={() => openConnManager("target")}
-                                    className="w-full bg-zinc-950 border border-zinc-700 hover:border-green-500 rounded-lg p-3 text-left transition-all group relative"
+                                    onClick={() => {
+                                        setFile(null);
+                                        setSheets([]);
+                                        setDetectedOwners([]);
+                                        setOwnerMappings({});
+                                    }}
+                                    className="text-xs text-red-500 hover:bg-zinc-800 px-3 py-1 rounded transition-colors"
                                 >
-                                    {targetConn ? (
-                                        <div>
-                                            <div className="font-medium text-zinc-200">{targetConn.name}</div>
-                                            <div className="text-xs text-zinc-500">{targetConn.username}@{targetConn.host}</div>
-                                        </div>
-                                    ) : (
-                                        <span className="text-zinc-500 italic">Select Target DB...</span>
-                                    )}
-                                    <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-green-500">
-                                        <Settings2 className="w-4 h-4" />
-                                    </div>
+                                    Reset File
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    {/* File Upload Card */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex flex-col items-center justify-center text-center">
-                        <div className="bg-zinc-800 p-3 rounded-full mb-3">
-                            <FileSpreadsheet className="w-6 h-6 text-zinc-400" />
+                        <div className="grid grid-cols-12 gap-4 mb-2 px-2 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                            <div className="col-span-2">Object Owner</div>
+                            <div className="col-span-5">Source Connection (Dev)</div>
+                            <div className="col-span-5">Target Connection (Deploy To)</div>
                         </div>
-                        <label htmlFor="file-upload" className="cursor-pointer group relative w-full max-w-xs">
-                            <span className="bg-blue-600 hover:bg-blue-500 text-white w-full py-2 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
-                                <Upload className="w-4 h-4" />
-                                {file ? "Change Excel File" : "Upload Object List (.xlsx)"}
-                            </span>
-                            <input
-                                id="file-upload"
-                                type="file"
-                                accept=".xlsx, .xls"
-                                className="hidden"
-                                onChange={handleFileUpload}
-                            />
-                        </label>
-                        {file && <p className="mt-3 text-zinc-400 text-sm">Selected: <span className="text-zinc-200 font-medium">{file.name}</span></p>}
+
+                        <div className="space-y-3">
+                            {detectedOwners.map(owner => (
+                                <div key={owner} className="grid grid-cols-12 gap-4 items-center bg-zinc-950/50 p-3 rounded-lg border border-zinc-800/50">
+                                    <div className="col-span-2 font-mono text-sm text-yellow-500 font-bold truncate" title={owner}>
+                                        {owner}
+                                    </div>
+
+                                    {/* Source Selector */}
+                                    <div className="col-span-5">
+                                        <button
+                                            onClick={() => openConnManager(owner, "source")}
+                                            className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.source
+                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                }`}
+                                        >
+                                            <div className="truncate flex flex-col">
+                                                <span className="font-medium">{ownerMappings[owner]?.source?.name || "Select Source DB..."}</span>
+                                                {ownerMappings[owner]?.source && (
+                                                    <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.source?.username}@{ownerMappings[owner]?.source?.host}</span>
+                                                )}
+                                            </div>
+                                            <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                                        </button>
+                                    </div>
+
+                                    {/* Target Selector */}
+                                    <div className="col-span-5">
+                                        <button
+                                            onClick={() => openConnManager(owner, "target")}
+                                            className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.target
+                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                }`}
+                                        >
+                                            <div className="truncate flex flex-col">
+                                                <span className="font-medium">{ownerMappings[owner]?.target?.name || "Select Target DB..."}</span>
+                                                {ownerMappings[owner]?.target && (
+                                                    <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.target?.username}@{ownerMappings[owner]?.target?.host}</span>
+                                                )}
+                                            </div>
+                                            <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Loading State */}
                 {isLoading && (
@@ -277,7 +351,7 @@ export default function DeployOracleDB() {
 
                 {/* Data Preview */}
                 {!isLoading && sheets.length > 0 && (
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl mb-24">
                         {/* Tabs */}
                         <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-950/50">
                             {sheets.map((sheet, idx) => (
@@ -334,7 +408,6 @@ export default function DeployOracleDB() {
                                         </thead>
                                         <tbody className="divide-y divide-zinc-800 bg-zinc-900/50">
                                             {filteredData.map((row) => {
-                                                // Find original index for selection logic
                                                 const originalIndex = sheets[activeTab].data.indexOf(row);
                                                 return (
                                                     <tr key={originalIndex} className={selectedRows[sheets[activeTab].name]?.has(originalIndex) ? "bg-blue-900/10" : "hover:bg-zinc-800/50 transition-colors"}>
@@ -368,8 +441,8 @@ export default function DeployOracleDB() {
                 )}
 
                 {/* Deploy Button (Floating) */}
-                {!isLoading && sheets.length > 0 && sourceConn && targetConn && (
-                    <div className="fixed bottom-8 right-8 z-40">
+                {!isLoading && isReadyToDeploy && (
+                    <div className="fixed bottom-8 right-8 z-40 animate-in zoom-in duration-300">
                         <button className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-green-900/40 flex items-center gap-3 transition-transform hover:scale-105 active:scale-95">
                             <Database className="w-5 h-5" />
                             START DEPLOYMENT
@@ -377,10 +450,11 @@ export default function DeployOracleDB() {
                     </div>
                 )}
 
+                {/* Global Connection Manager Modal */}
                 <ConnectionManager
                     isOpen={isConnManagerOpen}
                     onClose={() => setIsConnManagerOpen(false)}
-                    onSelect={handleConnSelect}
+                    onSelect={selectingForOwner ? handleConnSelect : undefined}
                 />
             </div>
         </div>
