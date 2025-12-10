@@ -30,7 +30,7 @@ Access 20+ powerful tools to streamline your development workflow:
 - **Password Generator**: Create strong, secure passwords with customizable length and character sets.
 
 ### 🧪 Testing & Debugging
-- **API Test**: A lightweight Postman alternative to test REST APIs (GET, POST, PUT, DELETE) directly from your browser.
+- **Hit API Endpoint**: A lightweight Postman alternative to test REST APIs (GET, POST, PUT, DELETE) directly from your browser.
 - **Regex Tester**: Test regular expressions against sample text with real-time matching and **human-readable explanations**.
 - **Diff Checker**: Compare two text files or code snippets side-by-side to spot differences (additions/removals).
 

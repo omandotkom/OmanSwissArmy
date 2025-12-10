@@ -209,7 +209,7 @@ export default function ApiTest() {
         <div className="flex min-h-screen flex-col bg-zinc-950 p-6 font-sans text-zinc-100">
             <ToastContainer toasts={toasts} removeToast={removeToast} />
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-light tracking-wide text-zinc-200">API Test</h1>
+                <h1 className="text-2xl font-light tracking-wide text-zinc-200">Hit API Endpoint</h1>
                 <Link
                     href="/"
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
