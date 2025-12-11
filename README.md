@@ -19,6 +19,8 @@ Access 20+ powerful tools to streamline your development workflow:
     - **File Operations**: Preview text files and **Download** any file (text/binary) to your local machine.
     - **Smart Filtering**: Filter Pods by their Storage Class (e.g., find all pods using `gp3` or `px-sc`).
     - **Storage Finder (px-sc)**: A powerful, realtime cluster scanner to find all workloads using a specific storage class (e.g., Portworx), complete with **Execution Logs** and **Excel Export**.
+- **PVC Analyzer**: Detect "Zombie" volumes (bound but unused PVCs) and analyze storage usage across the cluster.
+- **Resource Unit Converter**: Real-time CPU & Memory unit conversion for Kubernetes manifests (mCores, Gi, Mi).
 
 ### 🔧 Code & Data Formatting
 - **JSON Formatter**: Beautify and validate JSON data instantly with syntax highlighting.

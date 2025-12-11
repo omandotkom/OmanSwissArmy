@@ -58,6 +58,16 @@ export default function Home() {
           description: "Inspect Kubernetes Persistent Volume Claims.",
         },
         {
+          href: "/openshift-resource-converter",
+          title: "Resource Unit Converter",
+          description: "Convert CPU and Memory units for Kubernetes/OpenShift.",
+        },
+        {
+          href: "/pvc-analyzer",
+          title: "PVC Analyzer",
+          description: "Find zombie PVCs and analyze storage usage.",
+        },
+        {
           href: "/s3-browser",
           title: "S3 Browser",
           description: "Browse and manage S3-compatible buckets.",
