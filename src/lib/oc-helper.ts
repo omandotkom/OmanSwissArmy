@@ -121,7 +121,8 @@ export class OcClient {
     }
 
     async listFiles(namespace: string, podName: string, remotePath: string): Promise<FileItem[]> {
-        const cmd = ['exec', podName, '-n', namespace, '--', 'ls', '-lA', '--time-style=long-iso', remotePath];
+        // Use standard ls -la to be compatible with Alpine/BusyBox
+        const cmd = ['exec', podName, '-n', namespace, '--', 'ls', '-la', remotePath];
 
         try {
             const output = await this.runCommand(cmd);
@@ -140,14 +141,19 @@ export class OcClient {
             const line = lines[i].trim();
             if (!line) continue;
 
+            // Handle potential error messages in output
+            if (line.startsWith('ls:')) continue;
+
             const parts = line.split(/\s+/);
-            if (parts.length < 8) continue;
+            if (parts.length < 9) continue; // Need at least 9 parts for standard ls -l
 
             const permissions = parts[0];
             const sizeIndex = 4;
-            const dateIndex = 5;
-            const timeIndex = 6;
-            const nameIndex = 7;
+
+            // Standard ls -l: [Perms Links Owner Group Size Month Day Time/Year Name...]
+            // Date parts are at 5, 6, 7. Name starts at 8.
+            const dateStr = `${parts[5]} ${parts[6]} ${parts[7]}`;
+            const nameIndex = 8;
 
             const isDirectory = permissions.startsWith('d');
             const name = parts.slice(nameIndex).join(' ');
@@ -158,7 +164,7 @@ export class OcClient {
                 name,
                 isDirectory,
                 size: parts[sizeIndex],
-                lastModified: `${parts[dateIndex]} ${parts[timeIndex]}`,
+                lastModified: dateStr,
                 permissions
             });
         }

@@ -20,7 +20,8 @@ import {
     XCircle,
     Clock,
     Tag,
-    ShieldAlert
+    ShieldAlert,
+    FolderOpen
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 
@@ -355,6 +356,34 @@ export default function PvcAnalyzerPage() {
                 )}
             </div>
 
+            {/* Legend / Dictionary */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8 flex flex-wrap gap-6 text-sm">
+                <div className="flex items-start gap-3 max-w-sm">
+                    <div className="p-2 bg-red-500/10 text-red-400 rounded-lg shrink-0 mt-0.5">
+                        <Ghost size={18} />
+                    </div>
+                    <div>
+                        <div className="font-semibold text-slate-200">Zombie / Orphan</div>
+                        <p className="text-slate-400 text-xs mt-1">
+                            Barang (PVC, ConfigMap, Secret) yang ada tapi <b>gak ada yang make</b> (Unmounted). Cuma menuh-menuhin gudang & buang-buang kuota. Cek dulu sebelum dihapus!
+                        </p>
+                    </div>
+                </div>
+                {activeTab === 'pvc' && (
+                    <div className="flex items-start gap-3 max-w-sm">
+                        <div className="p-2 bg-orange-500/10 text-orange-400 rounded-lg shrink-0 mt-0.5">
+                            <AlertTriangle size={18} />
+                        </div>
+                        <div>
+                            <div className="font-semibold text-slate-200">RWO Risk</div>
+                            <p className="text-slate-400 text-xs mt-1">
+                                Bahaya laten! Storage tipe <b>Single-User (RWO)</b> tapi dipake rame-rame (&gt;1 Pod). Biasanya aman pas jalan, tapi pas <b>redeploy/rolling update</b> bakal stuck karena rebutan disk.
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {error && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">{error}</div>}
 
             {selectedProject && (
@@ -449,7 +478,18 @@ export default function PvcAnalyzerPage() {
                                                         <Database size={18} />
                                                     </div>
                                                     <div>
-                                                        <div className="font-medium text-slate-200">{pvc.name}</div>
+                                                        <div className="font-medium text-slate-200 flex items-center gap-2">
+                                                            {pvc.name}
+                                                            {pvc.scanCandidate && (
+                                                                <Link
+                                                                    href={`/pvc-browser?project=${selectedProject}&pod=${pvc.scanCandidate.podName}&path=${pvc.scanCandidate.mountPath}`}
+                                                                    className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-1 rounded-md transition-colors"
+                                                                    title="Browse Files"
+                                                                >
+                                                                    <FolderOpen size={14} />
+                                                                </Link>
+                                                            )}
+                                                        </div>
                                                         {pvc.isZombie && <div className="text-[10px] font-bold text-red-500 uppercase bg-red-500/10 px-1.5 py-0.5 rounded w-fit mt-1">Zombie</div>}
                                                         {/* RWO Risk Badge */}
                                                         {pvc.rwoRisk && (

@@ -16,9 +16,11 @@ import {
     Filter,
     Search,
     X,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Trash2
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { UserBadge } from "@/components/UserBadge";
 
@@ -60,8 +62,29 @@ interface SearchResult {
 }
 
 export default function PvcBrowserPage() {
+    const searchParams = useSearchParams();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [checkingLogin, setCheckingLogin] = useState(true);
+
+    // Auto-Load from URL
+    useEffect(() => {
+        if (isLoggedIn && searchParams) {
+            const prj = searchParams.get('project');
+            const pod = searchParams.get('pod');
+            const path = searchParams.get('path');
+
+            if (prj) {
+                setSelectedProject(prj);
+                if (pod) {
+                    setSelectedPodName(pod);
+                    const targetPath = path || '/';
+                    setCurrentPath(targetPath);
+                    // We need a slight delay or ensure logic allows fetching efficiently
+                    setTimeout(() => fetchFiles(prj, pod, targetPath), 500);
+                }
+            }
+        }
+    }, [isLoggedIn]);
 
     // Login State
     const [loginCommand, setLoginCommand] = useState('');
@@ -94,6 +117,37 @@ export default function PvcBrowserPage() {
     const [showSearchModal, setShowSearchModal] = useState(false);
     const [searchLogs, setSearchLogs] = useState<string[]>([]);
     const logsEndRef = useRef<HTMLDivElement>(null);
+
+    // Delete State
+    const [deleteItem, setDeleteItem] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!deleteItem) return;
+        setIsDeleting(true);
+        try {
+            const fullPath = (currentPath === '/' ? '' : currentPath) + '/' + deleteItem;
+            const res = await fetch('/api/oc/delete-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    namespace: selectedProject,
+                    pod: selectedPodName,
+                    path: fullPath
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                // Refresh
+                fetchFiles(selectedProject, selectedPodName, currentPath);
+                setDeleteItem(null);
+            } else {
+                setError(data.error);
+                setDeleteItem(null);
+            }
+        } catch (e) { setError('Delete failed'); }
+        finally { setIsDeleting(false); }
+    };
 
     // Filtered Pods Logic
     const filteredPods = pods.filter(pod => {
@@ -469,7 +523,13 @@ export default function PvcBrowserPage() {
                                         <td className="p-4 font-mono text-sm text-slate-500">{file.size}</td><td className="p-4 text-sm text-slate-500">{file.lastModified}</td>
                                         <td className="p-4">
                                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {!file.isDirectory && <><button onClick={() => handleFileView(file.name)} className="p-1 hover:text-blue-400" title="View"><Eye size={18} /></button><a href={`/api/oc/read?namespace=${selectedProject}&pod=${selectedPodName}&path=${encodeURIComponent((currentPath === '/' ? '' : currentPath) + '/' + file.name)}&download=true`} target="_blank" rel="noreferrer" className="p-1 hover:text-green-400" title="Download"><Download size={18} /></a></>}
+                                                {!file.isDirectory && (
+                                                    <>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleFileView(file.name); }} className="p-1 hover:text-blue-400" title="View"><Eye size={18} /></button>
+                                                        <a href={`/api/oc/read?namespace=${selectedProject}&pod=${selectedPodName}&path=${encodeURIComponent((currentPath === '/' ? '' : currentPath) + '/' + file.name)}&download=true`} target="_blank" rel="noreferrer" className="p-1 hover:text-green-400" title="Download" onClick={(e) => e.stopPropagation()}><Download size={18} /></a>
+                                                    </>
+                                                )}
+                                                <button onClick={(e) => { e.stopPropagation(); setDeleteItem(file.name); }} className="p-1 hover:text-red-500" title="Delete"><Trash2 size={18} /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -549,6 +609,39 @@ export default function PvcBrowserPage() {
                                     </table>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteItem && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-8 z-[60]">
+                    <div className="bg-slate-900 w-full max-w-md p-6 rounded-xl border border-red-500/50 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center gap-3 text-red-500">
+                            <div className="p-3 bg-red-500/20 rounded-full"><Trash2 size={24} /></div>
+                            <h3 className="font-bold text-xl">Delete File?</h3>
+                        </div>
+                        <p className="text-slate-300">
+                            Are you sure you want to delete <span className="font-mono font-bold text-white">{deleteItem}</span>?
+                            <br /><span className="text-sm text-slate-500 mt-2 block">This action is permanent and cannot be undone.</span>
+                        </p>
+                        <div className="flex justify-end gap-3 mt-4">
+                            <button
+                                onClick={() => setDeleteItem(null)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors flex items-center gap-2"
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? <RefreshCw className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                                {isDeleting ? 'Deleting...' : 'Delete Permanently'}
+                            </button>
                         </div>
                     </div>
                 </div>
