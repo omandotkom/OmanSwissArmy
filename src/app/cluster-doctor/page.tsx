@@ -88,7 +88,8 @@ export default function ClusterDoctorPage() {
             if (res.ok) {
                 setIsLoggedIn(true);
                 const data = await res.json();
-                setProjects(data.projects || []);
+                const uniqueProjects = Array.from(new Set(data.projects as string[]));
+                setProjects(uniqueProjects);
             } else { setIsLoggedIn(false); }
         } catch (e) { setIsLoggedIn(false); } finally { setCheckingLogin(false); }
     };
@@ -223,7 +224,7 @@ export default function ClusterDoctorPage() {
                     onChange={(e) => setSelectedProject(e.target.value)}
                 >
                     <option value="">-- Select Project to Diagnose --</option>
-                    {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                    {Array.from(new Set(projects)).map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
             </div>
 

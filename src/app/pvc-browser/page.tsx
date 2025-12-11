@@ -173,7 +173,9 @@ export default function PvcBrowserPage() {
             if (res.ok) {
                 setIsLoggedIn(true);
                 const data = await res.json();
-                setProjects(data.projects || []);
+                // Deduplicate projects just in case
+                const uniqueProjects = Array.from(new Set(data.projects as string[]));
+                setProjects(uniqueProjects);
             } else {
                 setIsLoggedIn(false);
             }
@@ -252,6 +254,11 @@ export default function PvcBrowserPage() {
                     });
                 });
                 setAvailableStorageClasses(Array.from(scSet).sort());
+
+                // Auto-select first pod for better UX
+                if (podsData.length > 0) {
+                    setSelectedPodName(podsData[0].name);
+                }
             } else setError(data.error);
         } catch (err) { setError('Failed to fetch pods'); }
         finally { setLoading(false); }
@@ -452,21 +459,21 @@ export default function PvcBrowserPage() {
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-300"><Database size={16} /> Project</label>
                         <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}>
                             <option value="">-- Select Project --</option>
-                            {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                            {Array.from(new Set(projects)).map((p, i) => <option key={`${p}-${i}`} value={p}>{p}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-300"><Filter size={16} /> Filter Storage Class</label>
                         <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50" value={selectedStorageClass} onChange={(e) => { setSelectedStorageClass(e.target.value); setSelectedPodName(''); }} disabled={!selectedProject || availableStorageClasses.length === 0}>
                             <option value="">-- All Storage Classes --</option>
-                            {availableStorageClasses.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+                            {availableStorageClasses.map((sc, i) => <option key={`${sc}-${i}`} value={sc}>{sc}</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-300"><Server size={16} /> Pod {selectedStorageClass && <span className="text-xs text-blue-400">(Filtered)</span>}</label>
                         <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50" value={selectedPodName} onChange={handlePodChange} disabled={!selectedProject}>
                             <option value="">-- Select Pod --</option>
-                            {filteredPods.map(p => <option key={p.name} value={p.name}>{p.name} ({p.status})</option>)}
+                            {filteredPods.map((pod, i) => <option key={`${pod.name}-${i}`} value={pod.name}>{pod.name} ({pod.status})</option>)}
                         </select>
                     </div>
                     <div className="space-y-2">
@@ -499,22 +506,66 @@ export default function PvcBrowserPage() {
             {/* File List ... existing implementation ... */}
 
             <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-xl">
-                <div className="p-4 border-b border-slate-700 bg-slate-800/80 flex justify-between items-center">
-                    <div className="flex items-center gap-2"><Home size={18} className="text-blue-400" /><span className="font-mono text-slate-300">{currentPath}</span></div>
-                    {loading && <RefreshCw size={18} className="animate-spin text-blue-400" />}
+                {/* Header with Breadcrumb */}
+                <div className="p-4 border-b border-slate-700 bg-slate-800/80 flex justify-between items-center text-sm font-mono overflow-x-auto whitespace-nowrap scrollbar-hide">
+                    <div className="flex items-center gap-1 text-slate-400">
+                        <Home size={16} className="text-blue-500 mr-2 cursor-pointer hover:text-blue-400 mb-0.5" onClick={() => setCurrentPath('/')} />
+                        <span className="cursor-pointer hover:text-blue-400 hover:underline" onClick={() => setCurrentPath('/')}>root</span>
+
+                        {currentPath.split('/').filter(Boolean).map((part, index, arr) => {
+                            const path = '/' + arr.slice(0, index + 1).join('/');
+                            const isLast = index === arr.length - 1;
+                            return (
+                                <div key={index} className="flex items-center">
+                                    <span className="mx-1 text-slate-600">/</span>
+                                    <span
+                                        className={`${isLast ? 'text-slate-200 font-bold' : 'cursor-pointer hover:text-blue-400 hover:underline'}`}
+                                        onClick={() => !isLast && setCurrentPath(path)}
+                                    >
+                                        {part}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {/* Small Loading Indicator */}
+                    {loading && <RefreshCw size={16} className="animate-spin text-blue-400 ml-4 hidden md:block" />}
                 </div>
-                <div className="min-h-[400px]">
-                    {files.length === 0 && !loading && <div className="flex flex-col items-center justify-center h-[400px] text-slate-500"><Folder size={48} className="mb-4 opacity-50" /><p>No files found or select a pod first</p></div>}
+
+                <div className="min-h-[400px] relative">
+                    {/* Loading Overlay */}
+                    {loading && (
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center z-20 transition-all duration-300">
+                            <div className="flex flex-col items-center gap-3 animate-in zoom-in fade-in duration-300 p-6 bg-slate-800/80 rounded-2xl border border-slate-700/50 shadow-2xl">
+                                <RefreshCw size={32} className="animate-spin text-blue-500" />
+                                <p className="text-slate-300 font-medium">Fetching file list...</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {!selectedPodName ? (
+                        <div className="flex flex-col items-center justify-center h-[400px] text-slate-400">
+                            <Server size={48} className="mb-4 opacity-30" />
+                            <p>Please select a Pod to start browsing</p>
+                            {selectedProject && pods.length === 0 && <p className="text-red-400 text-sm mt-2 font-mono">(No active pods found in this project)</p>}
+                        </div>
+                    ) : (files.length === 0 && !loading) && (
+                        <div className="flex flex-col items-center justify-center h-[400px] text-slate-500">
+                            <Folder size={48} className="mb-4 opacity-50" />
+                            <p>Directory is empty</p>
+                        </div>
+                    )}
+
                     {files.length > 0 && (
-                        <table className="w-full text-left text-slate-300">
+                        <table className={`w-full text-left text-slate-300 transition-opacity duration-300 ${loading ? 'opacity-30' : 'opacity-100'}`}>
                             <thead className="bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                                 <tr>
                                     <th className="p-4">Name</th><th className="p-4 w-32">Size</th><th className="p-4 w-48">Last Modified</th><th className="p-4 w-24">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {files.map((file) => (
-                                    <tr key={file.name} className="hover:bg-slate-700/30 transition-colors group">
+                                {files.map((file, idx) => (
+                                    <tr key={`${file.name}-${idx}`} className="hover:bg-slate-700/30 transition-colors group">
                                         <td className="p-4">
                                             <div className={`flex items-center gap-3 cursor-pointer ${file.isDirectory ? 'text-blue-400 font-medium' : 'text-slate-300'}`} onClick={() => file.isDirectory ? handleFolderClick(file.name) : handleFileView(file.name)}>
                                                 {file.isDirectory ? <Folder size={20} fill="currentColor" className="opacity-20 text-blue-500" /> : <File size={20} />}<span>{file.name}</span>
