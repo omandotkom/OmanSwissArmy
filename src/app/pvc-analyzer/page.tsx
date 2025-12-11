@@ -24,6 +24,7 @@ import {
     FolderOpen
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
+import { ProjectSelector } from "@/components/ProjectSelector";
 
 type Tab = 'pvc' | 'configmap' | 'secret';
 
@@ -307,19 +308,14 @@ export default function PvcAnalyzerPage() {
 
             {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="md:col-span-1 space-y-2">
-                    <label className="text-sm font-medium text-slate-400 block ml-1">Select Project</label>
-                    <select
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all text-slate-200"
-                        value={selectedProject}
-                        onChange={(e) => setSelectedProject(e.target.value)}
-                    >
-                        <option value="">-- Choose Project --</option>
-                        {Array.from(new Set(projects)).map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                </div>
-
-                {/* Stats Cards */}
+                <div className="md:col-span-1">
+                    <ProjectSelector
+                        projects={projects}
+                        selectedProject={selectedProject}
+                        onSelect={setSelectedProject}
+                        placeholder="Choose Project"
+                    />
+                </div>                {/* Stats Cards */}
                 {selectedProject && (
                     <>
                         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
@@ -432,16 +428,26 @@ export default function PvcAnalyzerPage() {
                             </div>
                         </div>
 
-                        {activeTab === 'pvc' && (
+                        <div className="flex items-center gap-2">
+                            {activeTab === 'pvc' && (
+                                <button
+                                    onClick={scanUsage}
+                                    disabled={loading || isScanningUsage}
+                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50 border border-slate-700 hover:border-slate-600"
+                                >
+                                    {isScanningUsage ? <RefreshCw className="animate-spin" size={16} /> : <HardDrive size={16} />}
+                                    {isScanningUsage ? 'Scanning...' : 'Scan Disk Usage'}
+                                </button>
+                            )}
                             <button
-                                onClick={scanUsage}
-                                disabled={loading || isScanningUsage}
-                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition-all flex items-center gap-2 disabled:opacity-50"
+                                onClick={fetchData}
+                                disabled={loading}
+                                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-all border border-slate-700 hover:border-slate-600 disabled:opacity-50"
+                                title="Refresh Data"
                             >
-                                {isScanningUsage ? <RefreshCw className="animate-spin" size={16} /> : <HardDrive size={16} />}
-                                {isScanningUsage ? 'Scanning...' : 'Scan Disk Usage'}
+                                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
                             </button>
-                        )}
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto">

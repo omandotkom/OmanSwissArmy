@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { UserBadge } from "@/components/UserBadge";
+import { ProjectSelector } from "@/components/ProjectSelector";
 
 interface FileItem {
     name: string;
@@ -457,10 +458,12 @@ export default function PvcBrowserPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-300"><Database size={16} /> Project</label>
-                        <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}>
-                            <option value="">-- Select Project --</option>
-                            {Array.from(new Set(projects)).map((p, i) => <option key={`${p}-${i}`} value={p}>{p}</option>)}
-                        </select>
+                        <ProjectSelector
+                            projects={projects}
+                            selectedProject={selectedProject}
+                            onSelect={setSelectedProject}
+                            placeholder="Select Project"
+                        />
                     </div>
                     <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-slate-300"><Filter size={16} /> Filter Storage Class</label>

@@ -18,6 +18,7 @@ import {
     BarChart3
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
+import { ProjectSelector } from "@/components/ProjectSelector";
 
 interface Quota {
     name: string;
@@ -217,15 +218,13 @@ export default function ClusterDoctorPage() {
             </div>
 
             {/* Project Select */}
-            <div className="mb-8">
-                <select
-                    className="w-full md:w-1/3 bg-slate-900 border border-slate-800 rounded-xl p-3 focus:ring-2 focus:ring-red-500/50 outline-none transition-all text-slate-200"
-                    value={selectedProject}
-                    onChange={(e) => setSelectedProject(e.target.value)}
-                >
-                    <option value="">-- Select Project to Diagnose --</option>
-                    {Array.from(new Set(projects)).map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+            <div className="mb-8 w-full md:w-1/3">
+                <ProjectSelector
+                    projects={projects}
+                    selectedProject={selectedProject}
+                    onSelect={setSelectedProject}
+                    placeholder="Select Project to Diagnose"
+                />
             </div>
 
             {/* Content */}

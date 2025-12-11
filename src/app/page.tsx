@@ -77,6 +77,11 @@ export default function Home() {
           title: "S3 Browser",
           description: "Browse and manage S3-compatible buckets.",
         },
+        {
+          href: "/idle-pod-finder",
+          title: "Idle Pod Finder",
+          description: "Detect inactive pods to save resources.",
+        },
       ],
     },
     {

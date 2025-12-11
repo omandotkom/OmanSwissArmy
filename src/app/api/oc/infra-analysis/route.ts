@@ -15,7 +15,15 @@ export async function GET(request: NextRequest) {
     try {
         // 1. Try Fetch Node Metrics (This often requires Admin privileges)
         // Output format: NAME   CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
-        let nodes = [];
+        interface NodeMetrics {
+            name: string;
+            cpuCores: string;
+            cpuPercent: string;
+            memoryBytes: string;
+            memoryPercent: string;
+        }
+
+        let nodes: NodeMetrics[] = [];
         let nodeError = null;
 
         try {
@@ -36,7 +44,13 @@ export async function GET(request: NextRequest) {
         }
 
         // 2. Fetch Project Pod Metrics
-        let pods = [];
+        interface PodMetrics {
+            name: string;
+            cpu: string;
+            memory: string;
+        }
+
+        let pods: PodMetrics[] = [];
         try {
             const podsOutput = await client.runCommand(['adm', 'top', 'pods', '-n', namespace, '--no-headers', '--sort-by=cpu']);
             pods = podsOutput.split('\n').filter(line => line.trim()).map(line => {
