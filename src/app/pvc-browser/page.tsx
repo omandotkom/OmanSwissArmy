@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { UserBadge } from "@/components/UserBadge";
 
 interface FileItem {
     name: string;
@@ -366,9 +367,12 @@ export default function PvcBrowserPage() {
                         <p className="text-slate-400">Connected to OpenShift</p>
                     </div>
                 </div>
-                <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
-                    <LogOut size={16} /> Disconnect
-                </button>
+                <div className="flex items-center gap-4">
+                    {isLoggedIn && <UserBadge />}
+                    <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
+                        <LogOut size={16} /> Disconnect
+                    </button>
+                </div>
             </div>
 
             {/* Custom Features Card */}

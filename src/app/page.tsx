@@ -68,6 +68,11 @@ export default function Home() {
           description: "Find zombie PVCs and analyze storage usage.",
         },
         {
+          href: "/cluster-doctor",
+          title: "Cluster Doctor",
+          description: "Diagnose stuck builds and cluster health.",
+        },
+        {
           href: "/s3-browser",
           title: "S3 Browser",
           description: "Browse and manage S3-compatible buckets.",
