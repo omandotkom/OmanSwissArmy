@@ -28,14 +28,21 @@ export async function POST(req: NextRequest) {
         }
 
         const response = await fetch(url, options);
-        const responseText = await response.text();
 
-        // Try to parse JSON if possible to return an object, otherwise return text
+        const contentType = response.headers.get("content-type") || "";
+        const isBinary = contentType.startsWith("image/") || contentType.includes("application/pdf");
+
         let responseData;
-        try {
-            responseData = JSON.parse(responseText);
-        } catch {
-            responseData = responseText;
+        if (isBinary) {
+            const arrayBuffer = await response.arrayBuffer();
+            responseData = Buffer.from(arrayBuffer).toString('base64');
+        } else {
+            const responseText = await response.text();
+            try {
+                responseData = JSON.parse(responseText);
+            } catch {
+                responseData = responseText;
+            }
         }
 
         const responseHeaders: Record<string, string> = {};
@@ -48,6 +55,8 @@ export async function POST(req: NextRequest) {
             statusText: response.statusText,
             headers: responseHeaders,
             data: responseData,
+            isBinary,
+            contentType,
         });
 
     } catch (error: unknown) {

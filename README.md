@@ -36,6 +36,17 @@ Access 20+ powerful tools to streamline your development workflow:
         - **Test & Auto-Save**: Verify connectivity with a single click; successful tests automatically save the connection profile.
         - **Import/Export**: Securely backup your connection profiles (encrypted file) or import legacy connections from SQL Developer JSON exports.
 
+### 📐 Architecture & Design
+- **ERD Designer**: Create and manage Entity Relationship Diagrams visually.
+    - **Visual Editing**: Add tables, columns (PK/FK/Types), and connect them with drag-and-drop.
+    - **DDL Import**: Reverse engineer your database by importing SQL/DDL (Copy-Paste or **Multi-File Upload**).
+    - **SQL Generation**: Auto-generate `CREATE TABLE` scripts for **PostgreSQL**, **MySQL**, **Oracle**, and **SQL Server**.
+    - **JSON Export/Import**: Save your work and revisit it later.
+- **Flowchart Designer**: Design interactive flowcharts and logic diagrams.
+    - **Standard Nodes**: Start/End, Process, Decision, and Input/Output nodes.
+    - **Drag & Drop**: Intuitive canvas interface with custom visual shapes for each node type.
+    - **Export**: Share your diagrams via JSON export/import.
+
 ### 🔧 Code & Data Formatting
 - **JSON Formatter**: Beautify and validate JSON data instantly with syntax highlighting.
 - **SQL Formatter**: Format complex SQL queries for better readability.
@@ -50,7 +61,7 @@ Access 20+ powerful tools to streamline your development workflow:
 - **Password Generator**: Create strong, secure passwords with customizable length and character sets.
 
 ### 🧪 Testing & Debugging
-- **Hit API Endpoint**: A lightweight Postman alternative to test REST APIs (GET, POST, PUT, DELETE) directly from your browser.
+- **Hit API Endpoint**: A lightweight Postman alternative to test REST APIs (GET, POST, PUT, DELETE) directly from your browser. Now supports **Binary Responses** (Image Preview).
 - **Regex Tester**: Test regular expressions against sample text with real-time matching and **human-readable explanations**.
 - **Diff Checker**: Compare two text files or code snippets side-by-side to spot differences (additions/removals).
 
@@ -80,6 +91,7 @@ Access 20+ powerful tools to streamline your development workflow:
 - **Backend Integration**: Node.js Child Process (for OpenShift CLI integration)
 - **Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/) (VS Code core)
 - **Icons**: [Lucide React](https://lucide.dev/)
+- **Diagramming**: [React Flow](https://reactflow.dev/)
 
 ## 📦 Getting Started
 

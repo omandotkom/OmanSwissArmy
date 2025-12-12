@@ -16,6 +16,8 @@ interface ResponseData {
     data: unknown;
     time?: number;
     error?: string;
+    isBinary?: boolean;
+    contentType?: string;
 }
 
 export default function ApiTest() {
@@ -155,6 +157,11 @@ export default function ApiTest() {
                 resHeaders = data.headers || {};
                 resData = data.data || data;
 
+                // Server mode returns isBinary and contentType from proxy
+                if (data.isBinary) {
+                    resHeaders['content-type'] = data.contentType;
+                }
+
             } else {
                 // Client Mode (Direct)
                 const options: RequestInit = {
@@ -170,11 +177,30 @@ export default function ApiTest() {
                 resStatus = res.status;
                 resStatusText = res.statusText;
 
-                const text = await res.text();
-                try {
-                    resData = JSON.parse(text);
-                } catch {
-                    resData = text;
+                const contentType = res.headers.get("content-type") || "";
+                const isBinary = contentType.startsWith("image/") || contentType.includes("application/pdf");
+
+                if (isBinary) {
+                    const blob = await res.blob();
+                    // Convert blob to base64 string for consistency
+                    resData = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const result = reader.result as string;
+                            // remove data: content/type;base64, prefix to store just the b64 string
+                            const base64 = result.split(',')[1];
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } else {
+                    const text = await res.text();
+                    try {
+                        resData = JSON.parse(text);
+                    } catch {
+                        resData = text;
+                    }
                 }
 
                 const h: Record<string, string> = {};
@@ -183,12 +209,19 @@ export default function ApiTest() {
             }
 
             const endTime = performance.now();
+
+            // Determine content type and binary status for final state
+            const finalContentType = resHeaders['content-type'] || resHeaders['Content-Type'] || "";
+            const finalIsBinary = finalContentType.startsWith("image/") || finalContentType.includes("application/pdf");
+
             setResponse({
                 status: resStatus,
                 statusText: resStatusText,
                 headers: resHeaders,
                 data: resData,
                 time: Math.round(endTime - startTime),
+                isBinary: finalIsBinary,
+                contentType: finalContentType,
             });
 
         } catch (err) {
@@ -399,19 +432,31 @@ export default function ApiTest() {
 
                     <div className="flex-grow rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden min-h-[500px] relative">
                         {response ? (
-                            <Editor
-                                height="100%"
-                                defaultLanguage="json"
-                                theme="vs-dark"
-                                value={JSON.stringify(response.data, null, 2)}
-                                options={{
-                                    readOnly: true,
-                                    minimap: { enabled: false },
-                                    fontSize: 13,
-                                    padding: { top: 16 },
-                                    scrollBeyondLastLine: false
-                                }}
-                            />
+                            response.isBinary && response.contentType?.startsWith("image/") ? (
+                                <div className="flex h-full items-center justify-center p-4 bg-zinc-950/50">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={`data:${response.contentType};base64,${response.data as string}`}
+                                        alt="Response Preview"
+                                        className="max-w-full max-h-full object-contain rounded border border-zinc-700 shadow-lg"
+                                    />
+                                </div>
+                            ) : (
+                                <Editor
+                                    height="100%"
+                                    defaultLanguage="json"
+                                    theme="vs-dark"
+                                    value={typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)}
+                                    options={{
+                                        readOnly: true,
+                                        minimap: { enabled: false },
+                                        fontSize: 13,
+                                        padding: { top: 16 },
+                                        scrollBeyondLastLine: false,
+                                        wordWrap: "on"
+                                    }}
+                                />
+                            )
                         ) : (
                             <div className="flex h-full items-center justify-center text-zinc-600">
                                 Response will appear here

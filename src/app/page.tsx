@@ -32,6 +32,16 @@ export default function Home() {
           title: "String Counter",
           description: "Count characters, words, and lines.",
         },
+        {
+          href: "/erd-design",
+          title: "ERD Designer",
+          description: "Design database schemas and generate SQL.",
+        },
+        {
+          href: "/flowchart-design",
+          title: "Flowchart Designer",
+          description: "Create interactive flowcharts and diagrams.",
+        },
       ],
     },
     {
