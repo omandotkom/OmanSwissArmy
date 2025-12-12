@@ -22,6 +22,20 @@ Access 20+ powerful tools to streamline your development workflow:
 - **PVC Analyzer**: Detect "Zombie" volumes (bound but unused PVCs) and analyze storage usage across the cluster.
 - **Resource Unit Converter**: Real-time CPU & Memory unit conversion for Kubernetes manifests (mCores, Gi, Mi).
 
+### 🗄️ Database Tools
+- **Oracle Object Validator**: A comprehensive suite for validating and managing Oracle Database objects.
+    - **Env Checker**: Compare database objects (Tables, Views, Packages, etc.) across environments (e.g., DEV vs UAT) with precision.
+        - **Whitespace Agnostic**: Accurately detects logic changes while ignoring formatting/whitespace differences using robust normalization.
+        - **Excel Integration**: Upload object lists via Excel for bulk validation.
+        - **Interactive Diff Viewer**: Side-by-side Monaco Editor diff view with syntax highlighting (`plsql`) to verify changes down to the line.
+        - **Auto-Compile/Sync**: ⚡ Push changes from Source to Target (or vice-versa) directly from the UI with safety checks, confirmation dialogs, and auto-rescan.
+        - **Auto-Mapping**: Smartly suggests connection mappings based on object owners found in the uploaded file.
+        - **Excel Reports**: Export detailed validation results to Excel.
+    - **Connection Manager**: Securely manage Oracle Database connections.
+        - **Encrypted Storage**: Connections are stored locally in browser's IndexedDB with AES encryption.
+        - **Test & Auto-Save**: Verify connectivity with a single click; successful tests automatically save the connection profile.
+        - **Import/Export**: Securely backup your connection profiles (encrypted file) or import legacy connections from SQL Developer JSON exports.
+
 ### 🔧 Code & Data Formatting
 - **JSON Formatter**: Beautify and validate JSON data instantly with syntax highlighting.
 - **SQL Formatter**: Format complex SQL queries for better readability.
@@ -62,6 +76,7 @@ Access 20+ powerful tools to streamline your development workflow:
 - **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Database**: [node-oracledb](https://node-oracledb.readthedocs.io/) (Oracle Database Driver)
 - **Backend Integration**: Node.js Child Process (for OpenShift CLI integration)
 - **Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/) (VS Code core)
 - **Icons**: [Lucide React](https://lucide.dev/)

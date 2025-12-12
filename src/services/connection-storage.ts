@@ -130,6 +130,27 @@ export const deleteConnection = async (id: string): Promise<void> => {
     });
 };
 
+export const getEncryptedExportData = async (): Promise<string> => {
+    const connections = await getAllConnections();
+    return encryptData(connections);
+};
+
+export const importEncryptedData = async (encryptedContent: string): Promise<number> => {
+    const connections = decryptData(encryptedContent);
+    if (!connections || !Array.isArray(connections)) {
+        throw new Error("Invalid or corrupted file.");
+    }
+
+    let count = 0;
+    for (const conn of connections) {
+        if (conn.name && conn.host) {
+            await saveConnection(conn);
+            count++;
+        }
+    }
+    return count;
+};
+
 // --- S3 FUNCTIONS ---
 
 export const saveS3Connection = async (profile: S3ConnectionProfile): Promise<void> => {

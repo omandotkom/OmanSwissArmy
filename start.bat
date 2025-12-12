@@ -23,10 +23,10 @@ if %errorlevel% neq 0 (
 echo [OK] Node.js is ready.
 
 :: 2. Check node_modules
-if exist "node_modules" goto :SKIP_INSTALL
-
+:: We run npm install every time to ensure new packages (like oracledb) are installed. 
+:: npm is smart enough to skip if nothing changed.
 echo.
-echo [+] First run detected. Installing dependencies...
+echo [+] Verify dependencies...
 echo     (This may take a few minutes)
 echo.
 echo.
@@ -35,11 +35,17 @@ REM call npm install --registry=https://nexus.apps.ocp.sm.co.id/repository/npm-p
 call npm install
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] npm install failed.
-    echo         Please check your internet connection.
+    echo [WARNING] Standard npm install failed. Retrying with corporate proxy...
     echo.
-    pause
-    exit /b 1
+    call npm install --registry=https://nexus.apps.ocp.sm.co.id/repository/npm-proxy
+    if %errorlevel% neq 0 (
+        echo.
+        echo [ERROR] npm install failed even with proxy.
+        echo         Please check your internet connection or VPN.
+        echo.
+        pause
+        exit /b 1
+    )
 )
 echo [OK] Dependencies installed.
 

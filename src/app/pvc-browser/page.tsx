@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import {
     Folder,
     File,
@@ -62,7 +62,7 @@ interface SearchResult {
     storageClass: string;
 }
 
-export default function PvcBrowserPage() {
+function PvcBrowserContent() {
     const searchParams = useSearchParams();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [checkingLogin, setCheckingLogin] = useState(true);
@@ -703,3 +703,12 @@ export default function PvcBrowserPage() {
         </div>
     );
 }
+
+export default function PvcBrowserPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">Loading Page...</div>}>
+            <PvcBrowserContent />
+        </Suspense>
+    );
+}
+

@@ -82,6 +82,11 @@ export default function Home() {
           title: "Idle Pod Finder",
           description: "Detect inactive pods to save resources.",
         },
+        {
+          href: "/oracle-object-validator",
+          title: "Oracle Object DB Validator",
+          description: "Compare and validate Oracle DB objects between environments.",
+        },
       ],
     },
     {

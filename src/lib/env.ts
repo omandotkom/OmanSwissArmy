@@ -3,7 +3,7 @@ export const isDesktopApp = (): boolean => {
 
     // Check for Electron
     const isElectron =
-        // @ts-expect-error: `process` is injected by Electron
+
         (window.process && window.process.versions && window.process.versions.electron) ||
         navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
 
