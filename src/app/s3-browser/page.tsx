@@ -4,9 +4,14 @@ import React, { useState, useEffect } from 'react';
 import {
     Folder, File, ArrowLeft, RefreshCw, Download, Cloud, LogOut, Database,
     ChevronRight, HardDrive, BarChart2, AlertCircle, Plus, Save, Trash2,
-    Settings, X, Edit2, Server
+    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText
 } from 'lucide-react';
+import * as mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 import Link from 'next/link';
+import {
+    PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
 import {
     getAllS3Connections,
     saveS3Connection,
@@ -33,15 +38,19 @@ interface S3FileItem {
 interface BucketUsage {
     totalSize: number;
     objectCount: number;
+    fileTypeStats?: Record<string, { count: number, size: number }>;
 }
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
+
 
 // --- Components ---
 
-const Modal = ({ title, isOpen, onClose, children }: { title: string, isOpen: boolean, onClose: () => void, children: React.ReactNode }) => {
+const Modal = ({ title, isOpen, onClose, children, className = "max-w-md" }: { title: string, isOpen: boolean, onClose: () => void, children: React.ReactNode, className?: string }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className={`bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full ${className} overflow-hidden animate-in zoom-in-95 duration-200`}>
                 <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                     <h3 className="font-semibold text-slate-200">{title}</h3>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors"><X size={20} /></button>
@@ -79,6 +88,7 @@ export default function S3BrowserPage() {
     // Analytics
     const [usageLoading, setUsageLoading] = useState(false);
     const [bucketUsage, setBucketUsage] = useState<BucketUsage | null>(null);
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
     // --- Modals State ---
     const [showAddBucketModal, setShowAddBucketModal] = useState(false);
@@ -86,6 +96,10 @@ export default function S3BrowserPage() {
 
     const [showCapacityModal, setShowCapacityModal] = useState(false);
     const [capacityInput, setCapacityInput] = useState('');
+
+    // --- State: Preview ---
+    const [previewData, setPreviewData] = useState<{ name: string, type: 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'code' | 'office' | 'unsupported', url: string, content?: string } | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
 
     // --- Effects ---
 
@@ -332,7 +346,10 @@ export default function S3BrowserPage() {
                 body: JSON.stringify({ ...cfg, bucketName: selectedBucket })
             });
             const data = await res.json();
-            if (res.ok) setBucketUsage(data);
+            if (res.ok) {
+                setBucketUsage(data);
+                setShowAnalysisModal(true); // Auto show analysis after calc
+            }
             else alert('Calc failed: ' + data.error);
         } catch (e) { alert('Error'); } finally { setUsageLoading(false); }
     };
@@ -371,6 +388,99 @@ export default function S3BrowserPage() {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
+
+    // --- Helpers: Preview ---
+
+    const getFileType = (fileName: string): 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'code' | 'office' | 'unsupported' => {
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) return 'image';
+        if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) return 'video';
+        if (['mp3', 'wav', 'aac', 'flac'].includes(ext)) return 'audio';
+        if (['pdf'].includes(ext)) return 'pdf';
+        if (['docx', 'xlsx', 'xls'].includes(ext)) return 'office';
+        if (['txt', 'log', 'csv', 'md', 'env', 'gitignore'].includes(ext)) return 'text';
+        if (['json', 'js', 'jsx', 'ts', 'tsx', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'sql', 'sh', 'bat', 'py', 'go', 'java', 'c', 'cpp', 'h'].includes(ext)) return 'code';
+        return 'unsupported';
+    };
+
+    const handlePreview = async (fileKey: string, fileName: string) => {
+        const type = getFileType(fileName);
+        if (type === 'unsupported') {
+            if (!confirm(`Preview for .${fileName.split('.').pop()} might not be supported or correct. Try anyway?`)) return;
+        }
+
+        setPreviewLoading(true);
+        const profile = profiles.find(p => p.id === activeProfileId);
+        const cfg = profile ? profile.config : formConfig;
+
+        try {
+            // Get Presigned URL (for download button in preview)
+            const res = await fetch('/api/s3/url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...cfg, bucketName: selectedBucket, key: fileKey })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.url) {
+                let content = undefined;
+
+                // For Text/Code/Office, fetch the actual content via backend proxy to avoid CORS/SSL
+                if (type === 'text' || type === 'code' || type === 'office' || type === 'unsupported') {
+                    try {
+                        // Use proxy endpoint
+                        const contentReq = await fetch('/api/s3/content', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...cfg, bucketName: selectedBucket, key: fileKey })
+                        });
+
+                        if (!contentReq.ok) throw new Error("Failed to fetch file content from proxy");
+
+                        if (type === 'office') {
+                            const arrayBuffer = await contentReq.arrayBuffer();
+                            const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+                            if (ext === 'docx') {
+                                const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                                content = result.value; // The generated HTML
+                            } else if (ext === 'xlsx' || ext === 'xls') {
+                                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                                const sheetName = workbook.SheetNames[0];
+                                const worksheet = workbook.Sheets[sheetName];
+                                content = XLSX.utils.sheet_to_html(worksheet);
+                            }
+                        } else {
+                            content = await contentReq.text();
+                        }
+
+                    } catch (e) {
+                        console.error(e);
+                        alert("Could not load content for preview (CORS/Network limit). Downloading instead?");
+                        window.open(data.url, '_blank');
+                        setPreviewLoading(false);
+                        return;
+                    }
+                }
+
+                setPreviewData({
+                    name: fileName,
+                    type: type === 'unsupported' ? 'text' : type, // Fallback unsupported to text view
+                    url: data.url,
+                    content: content
+                });
+            } else {
+                alert('Preview unable to generate URL');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error generating preview');
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    const closePreview = () => setPreviewData(null);
 
     // --- Render ---
 
@@ -544,10 +654,20 @@ export default function S3BrowserPage() {
                                                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Objects</span>
                                                     <span className="text-xs text-slate-200 font-mono">{bucketUsage.objectCount.toLocaleString()}</span>
                                                 </div>
+                                                <div className="w-px h-6 bg-slate-800"></div>
+                                                <button onClick={() => setShowAnalysisModal(true)} className="p-1 hover:bg-slate-800 rounded text-blue-400 hover:text-blue-300 transition-colors" title="View Analysis">
+                                                    <BarChart2 size={16} />
+                                                </button>
                                             </div>
                                         ) : (
-                                            <button onClick={calculateUsage} disabled={usageLoading} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 border border-slate-700 transition-colors">
-                                                {usageLoading ? <RefreshCw className="animate-spin" size={14} /> : <BarChart2 size={14} />} Calculate Usage
+                                            <button onClick={calculateUsage} disabled={usageLoading} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 border border-slate-700 transition-colors" title="Analyzes file types distribution, counts, and sizes with visual charts">
+                                                {usageLoading ? (
+                                                    <>
+                                                        <RefreshCw className="animate-spin" size={14} /> <span className="animate-pulse">Analyzing files...</span>
+                                                    </>
+                                                ) : (
+                                                    <><BarChart2 size={14} /> Analyze Content</>
+                                                )}
                                             </button>
                                         )}
                                     </div>
@@ -635,9 +755,14 @@ export default function S3BrowserPage() {
                                                     <td className="px-4 py-2 text-slate-500 text-xs border-y border-transparent group-hover:border-slate-700">{file.lastModified ? new Date(file.lastModified).toLocaleDateString() : '-'}</td>
                                                     <td className="px-4 py-2 text-right rounded-r-lg border-y border-r border-transparent group-hover:border-slate-700">
                                                         {!file.isDirectory && (
-                                                            <button onClick={() => handleDownload(file.key)} className="p-1.5 text-slate-500 hover:text-green-400 hover:bg-slate-700 rounded transition-colors" title="Download">
-                                                                <Download size={16} />
-                                                            </button>
+                                                            <>
+                                                                <button onClick={() => handlePreview(file.key, file.name)} disabled={previewLoading} className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors mr-1" title="Preview">
+                                                                    {previewLoading ? <RefreshCw className="animate-spin" size={16} /> : <Eye size={16} />}
+                                                                </button>
+                                                                <button onClick={() => handleDownload(file.key)} className="p-1.5 text-slate-500 hover:text-green-400 hover:bg-slate-700 rounded transition-colors" title="Download">
+                                                                    <Download size={16} />
+                                                                </button>
+                                                            </>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -691,6 +816,177 @@ export default function S3BrowserPage() {
                 </div>
             </Modal>
 
-        </div>
+            {/* Preview Modal */}
+            {
+                previewData && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900">
+                                <div className="flex items-center gap-3">
+                                    {previewData.type === 'image' && <FileImage className="text-purple-400" size={20} />}
+                                    {previewData.type === 'video' && <FileVideo className="text-blue-400" size={20} />}
+                                    {previewData.type === 'audio' && <Music className="text-pink-400" size={20} />}
+                                    {(previewData.type === 'code' || previewData.type === 'text') && <FileCode className="text-green-400" size={20} />}
+                                    {previewData.type === 'office' && <FileText className="text-blue-500" size={20} />}
+                                    <h3 className="font-semibold text-slate-200 truncate max-w-md">{previewData.name}</h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <a href={previewData.url} target="_blank" rel="noreferrer" download className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-2 transition-colors">
+                                        <Download size={14} /> Download
+                                    </a>
+                                    <button onClick={closePreview} className="text-slate-500 hover:text-white p-1 hover:bg-slate-800 rounded transition-colors">
+                                        <X size={24} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-auto bg-slate-950 flex items-center justify-center relative">
+                                {previewData.type === 'image' && (
+                                    <img src={previewData.url} alt={previewData.name} className="max-w-full max-h-full object-contain" />
+                                )}
+
+                                {previewData.type === 'video' && (
+                                    <video controls autoPlay className="max-w-full max-h-full">
+                                        <source src={previewData.url} />
+                                        Your browser does not support the video tag.
+                                    </video>
+                                )}
+
+                                {previewData.type === 'audio' && (
+                                    <div className="p-12 flex flex-col items-center justify-center bg-slate-900 rounded-2xl border border-slate-800">
+                                        <Music size={64} className="text-slate-700 mb-6 animate-pulse" />
+                                        <audio controls autoPlay className="w-full min-w-[300px]">
+                                            <source src={previewData.url} />
+                                            Your browser does not support the audio element.
+                                        </audio>
+                                    </div>
+                                )}
+
+                                {previewData.type === 'pdf' && (
+                                    <iframe src={previewData.url} className="w-full h-full border-none" title="PDF Preview"></iframe>
+                                )}
+
+                                {(previewData.type === 'text' || previewData.type === 'code') && (
+                                    <div className="w-full h-full overflow-auto p-0 text-left">
+                                        <pre className="p-4 text-xs sm:text-sm font-mono text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                                            <code>{previewData.content}</code>
+                                        </pre>
+                                    </div>
+                                )}
+
+                                {previewData.type === 'office' && (
+                                    <div className="w-full h-full overflow-auto p-8 bg-white text-slate-900">
+                                        <div
+                                            className="prose max-w-none"
+                                            dangerouslySetInnerHTML={{ __html: previewData.content || '' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Analysis Modal */}
+            <Modal title={`Content Analysis: ${selectedBucket}`} isOpen={showAnalysisModal} onClose={() => setShowAnalysisModal(false)} className="max-w-[50%]">
+                <div className="space-y-6">
+                    {bucketUsage && bucketUsage.fileTypeStats ? (
+                        <>
+                            <div className="h-64 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={Object.entries(bucketUsage.fileTypeStats)
+                                                .map(([type, stats]) => ({ name: type, value: stats.count, size: stats.size }))
+                                                .sort((a, b) => b.value - a.value)
+                                                .slice(0, 10)
+                                            }
+                                            cx="50%"
+                                            cy="50%"
+                                            labelLine={false}
+                                            outerRadius={80}
+                                            fill="#8884d8"
+                                            dataKey="value"
+                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
+                                                const RADIAN = Math.PI / 180;
+                                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                                const x = cx + radius * Math.cos(-(midAngle || 0) * RADIAN);
+                                                const y = cy + radius * Math.sin(-(midAngle || 0) * RADIAN);
+                                                return (percent || 0) > 0.05 ? (
+                                                    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={10}>
+                                                        {`${((percent || 0) * 100).toFixed(0)}%`}
+                                                    </text>
+                                                ) : null;
+                                            }}
+                                        >
+                                            {Object.entries(bucketUsage.fileTypeStats)
+                                                .map(([type], index) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))
+                                            }
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                                            formatter={(value: any, name: any, props: any) => [
+                                                `${Number(value).toLocaleString()} files (${formatSize(props.payload.size)})`,
+                                                String(name).toUpperCase()
+                                            ]}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            <div className="max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="text-slate-500 font-bold border-b border-slate-800 uppercase sticky top-0 bg-slate-900">
+                                        <tr>
+                                            <th className="pb-2">Type</th>
+                                            <th className="pb-2 text-right">Count</th>
+                                            <th className="pb-2 text-right">Size</th>
+                                            <th className="pb-2 text-right">%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                                        {Object.entries(bucketUsage.fileTypeStats)
+                                            .sort(([, a], [, b]) => b.count - a.count)
+                                            .map(([type, stats], idx) => (
+                                                <tr key={type} className="hover:bg-slate-800/50">
+                                                    <td className="py-2 flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                                                        .{type}
+                                                    </td>
+                                                    <td className="py-2 text-right font-mono">{stats.count.toLocaleString()}</td>
+                                                    <td className="py-2 text-right font-mono">{formatSize(stats.size)}</td>
+                                                    <td className="py-2 text-right text-slate-500">
+                                                        {((stats.count / bucketUsage.objectCount) * 100).toFixed(1)}%
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                    <tfoot className="border-t border-slate-700 font-bold text-slate-200">
+                                        <tr>
+                                            <td className="py-2 pt-3">TOTAL</td>
+                                            <td className="py-2 pt-3 text-right">{bucketUsage.objectCount.toLocaleString()}</td>
+                                            <td className="py-2 pt-3 text-right">{formatSize(bucketUsage.totalSize)}</td>
+                                            <td className="py-2 pt-3 text-right">100%</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-12 text-slate-500">
+                            <p>No analysis data available.</p>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+
+        </div >
     );
 }

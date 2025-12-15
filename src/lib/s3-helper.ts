@@ -100,6 +100,7 @@ export class S3Service {
     async getBucketUsage(bucketName: string) {
         let totalSize = 0;
         let objectCount = 0;
+        let fileTypeStats: Record<string, { count: number, size: number }> = {};
         let continuationToken: string | undefined = undefined;
 
         try {
@@ -111,17 +112,37 @@ export class S3Service {
                 const response = await this.client.send(command);
 
                 response.Contents?.forEach(c => {
-                    totalSize += c.Size || 0;
+                    const size = c.Size || 0;
+                    totalSize += size;
                     objectCount++;
+
+                    if (c.Key && !c.Key.endsWith('/')) {
+                        const ext = c.Key.split('.').pop()?.toLowerCase() || 'unknown';
+                        if (!fileTypeStats[ext]) fileTypeStats[ext] = { count: 0, size: 0 };
+                        fileTypeStats[ext].count++;
+                        fileTypeStats[ext].size += size;
+                    }
                 });
 
                 continuationToken = response.NextContinuationToken;
             } while (continuationToken);
 
-            return { totalSize, objectCount };
+            return { totalSize, objectCount, fileTypeStats };
         } catch (error) {
             console.error("Error calculating usage:", error);
             throw error;
         }
+    }
+
+    async getFileBuffer(bucketName: string, key: string) {
+        const command = new GetObjectCommand({
+            Bucket: bucketName,
+            Key: key
+        });
+        const response = await this.client.send(command);
+        if (response.Body) {
+            return response.Body.transformToByteArray();
+        }
+        throw new Error("Empty body");
     }
 }
