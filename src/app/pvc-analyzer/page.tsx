@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     Database,
     ArrowLeft,
@@ -21,7 +22,8 @@ import {
     Clock,
     Tag,
     ShieldAlert,
-    FolderOpen
+    FolderOpen,
+    Eye
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { ProjectSelector } from "@/components/ProjectSelector";
@@ -67,6 +69,7 @@ interface SecretAnalysis {
 }
 
 export default function PvcAnalyzerPage() {
+    const router = useRouter();
     // Auth & Project State
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [projects, setProjects] = useState<string[]>([]);
@@ -85,11 +88,37 @@ export default function PvcAnalyzerPage() {
     const [error, setError] = useState("");
     const [isScanningUsage, setIsScanningUsage] = useState(false);
 
+    // New State for Inspect
+    const [inspecting, setInspecting] = useState<string | null>(null);
+
     // Filters
     const [statusFilter, setStatusFilter] = useState("All");
     const [scFilter, setScFilter] = useState("All");
     const [mountedFilter, setMountedFilter] = useState("All");
     const [nameFilter, setNameFilter] = useState("");
+
+    // --- Inspect Function ---
+
+    const handleInspect = async (pvcName: string) => {
+        setInspecting(pvcName);
+        try {
+            const res = await fetch('/api/oc/inspect-pvc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ namespace: selectedProject, pvcName })
+            });
+
+            if (!res.ok) throw new Error((await res.json()).error);
+
+            const data = await res.json();
+            // Redirect to Browser with new pod
+            router.push(`/pvc-browser?project=${selectedProject}&pod=${data.podName}&path=${data.mountPath}`);
+
+        } catch (e: any) {
+            alert(`Failed to inspect: ${e.message}`);
+            setInspecting(null);
+        }
+    };
 
     // --- Auth Functions (Same as before) ---
     useEffect(() => { checkLoginStatus(); }, []);
@@ -496,6 +525,16 @@ export default function PvcAnalyzerPage() {
                                                                     <FolderOpen size={14} />
                                                                 </Link>
                                                             )}
+                                                            {pvc.isZombie && (
+                                                                <button
+                                                                    onClick={() => handleInspect(pvc.name)}
+                                                                    disabled={!!inspecting}
+                                                                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 p-1 rounded-md transition-colors disabled:opacity-50"
+                                                                    title="Inspect Zombie PVC (Spawns temporary pod)"
+                                                                >
+                                                                    {inspecting === pvc.name ? <RefreshCw className="animate-spin" size={14} /> : <Eye size={14} />}
+                                                                </button>
+                                                            )}
                                                         </div>
                                                         {pvc.isZombie && <div className="text-[10px] font-bold text-red-500 uppercase bg-red-500/10 px-1.5 py-0.5 rounded w-fit mt-1">Zombie</div>}
                                                         {/* RWO Risk Badge */}
@@ -515,7 +554,7 @@ export default function PvcAnalyzerPage() {
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${pvc.status === 'Bound' ? 'bg-green-500/10 text-green-400' :
-                                                    pvc.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
+                                                        pvc.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
                                                     }`}>
                                                     {pvc.status}
                                                 </span>
@@ -527,7 +566,7 @@ export default function PvcAnalyzerPage() {
                                                         <Clock size={14} className="text-slate-500" /> {pvc.age}
                                                     </div>
                                                     <div className={`text-xs px-2 py-0.5 rounded-full w-fit ${pvc.reclaimPolicy === 'Delete' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                        pvc.reclaimPolicy === 'Retain' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500'
+                                                            pvc.reclaimPolicy === 'Retain' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500'
                                                         }`}>
                                                         {pvc.reclaimPolicy}
                                                     </div>

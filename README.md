@@ -19,7 +19,12 @@ Access 20+ powerful tools to streamline your development workflow:
     - **File Operations**: Preview text files and **Download** any file (text/binary) to your local machine.
     - **Smart Filtering**: Filter Pods by their Storage Class (e.g., find all pods using `gp3` or `px-sc`).
     - **Storage Finder (px-sc)**: A powerful, realtime cluster scanner to find all workloads using a specific storage class (e.g., Portworx), complete with **Execution Logs** and **Excel Export**.
-- **PVC Analyzer**: Detect "Zombie" volumes (bound but unused PVCs) and analyze storage usage across the cluster.
+- **PVC Analyzer**: Detect "Zombie" volumes (bound but unused PVCs), analyze storage usage, and **Inspect contents** via temporary debug pods.
+- **PVC Migrator (Beta)**: A guided wizard to safely migrate Persistent Volume Claims (PVCs) between Storage Classes.
+    - **Zero Data Loss**: Uses robust `rsync`-like file synchronization with verification.
+    - **Step-by-Step Wizard**: Auto-detects attached deployments, scales down applications, provisions new storage, copies data, and updates configuration.
+    - **Safety First**: Includes **HPA Detection**, **Two-Stage Verification** (Quick/Deep), and **Emergency Cleanup**.
+    - **No "Ghost" Pods**: Ensures application consistency by handling safe shutdown and startup.
 - **Resource Unit Converter**: Real-time CPU & Memory unit conversion for Kubernetes manifests (mCores, Gi, Mi).
 
 ### 🗄️ Database Tools

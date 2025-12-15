@@ -289,6 +289,45 @@ export class OcClient {
             return [];
         }
     }
+    async createDebugPod(namespace: string, podName: string, pvcName: string, durationSeconds: number = 600) {
+        const yaml = `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${podName}
+  namespace: ${namespace}
+  labels:
+    app: pvc-debug-inspector
+spec:
+  containers:
+    - name: debugger
+      image: alpine:latest
+      # Auto-terminate after duration (Time-Bomb Strategy)
+      command: ["/bin/sh", "-c", "sleep ${durationSeconds}"] 
+      volumeMounts:
+        - name: target-pvc
+          mountPath: /mnt/data
+  volumes:
+    - name: target-pvc
+      persistentVolumeClaim:
+        claimName: ${pvcName}
+  restartPolicy: Never
+`;
+
+        // Write to temp file and apply
+        const fs = require('fs');
+        const os = require('os');
+        const tempPath = path.join(os.tmpdir(), `debug-pod-${Date.now()}.yaml`);
+        fs.writeFileSync(tempPath, yaml);
+
+        try {
+            await this.runCommand(['apply', '-f', tempPath]);
+            fs.unlinkSync(tempPath);
+        } catch (e) {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            throw e;
+        }
+    }
 }
 
 export interface SearchResult {

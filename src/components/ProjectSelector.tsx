@@ -9,6 +9,7 @@ interface ProjectSelectorProps {
     onSelect: (project: string) => void;
     placeholder?: string;
     label?: string;
+    isLoading?: boolean;
 }
 
 export function ProjectSelector({
@@ -16,7 +17,8 @@ export function ProjectSelector({
     selectedProject,
     onSelect,
     placeholder = "Select Project",
-    label = "Select Project"
+    label = "Select Project",
+    isLoading = false
 }: ProjectSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -46,6 +48,17 @@ export function ProjectSelector({
         onSelect("");
         setSearchTerm("");
     };
+
+    if (isLoading) {
+        return (
+            <div className="w-full space-y-2">
+                {label && <label className="text-sm font-medium text-slate-400 block ml-1">{label}</label>}
+                <div className="w-full h-12 bg-gray-800/50 rounded-xl animate-pulse border border-gray-700/50 flex items-center px-4">
+                    <div className="h-4 bg-gray-600 rounded w-1/3"></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full space-y-2" ref={wrapperRef}>
