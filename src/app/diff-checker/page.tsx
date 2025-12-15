@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import type { SVGProps } from "react";
 import Link from "next/link";
-import { DiffEditor, Editor } from "@monaco-editor/react";
+import { DiffEditor } from "@monaco-editor/react";
 
 const ArrowLeft = (props: SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
@@ -16,12 +16,6 @@ const Columns = (props: SVGProps<SVGSVGElement>) => (
 )
 const Code2 = (props: SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m18 16 4-4-4-4" /><path d="m6 8-4 4 4 4" /><path d="m14.5 4-5 16" /></svg>
-)
-const Play = (props: SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="5 3 19 12 5 21 5 3" /></svg>
-)
-const Edit3 = (props: SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 )
 
 const LANGUAGES = [
@@ -36,11 +30,31 @@ const LANGUAGES = [
 ];
 
 export default function DiffChecker() {
+    // Initialize with some default text to show usage
     const [original, setOriginal] = useState("");
     const [modified, setModified] = useState("");
-    const [isDiffMode, setIsDiffMode] = useState(false);
     const [language, setLanguage] = useState("plaintext");
     const [inlineDiff, setInlineDiff] = useState(false);
+
+    // Using refs to prevent state update loops if necessary, 
+    // but simply updating state on content change is usually fine with Monaco.
+    const diffEditorRef = useRef<any>(null);
+
+    const handleDiffEditorDidMount = useCallback((editor: any) => {
+        diffEditorRef.current = editor;
+
+        // Make sure we capture edits from both sides to keep our state in sync
+        const originalEditor = editor.getOriginalEditor();
+        const modifiedEditor = editor.getModifiedEditor();
+
+        originalEditor.onDidChangeModelContent(() => {
+            setOriginal(originalEditor.getValue());
+        });
+
+        modifiedEditor.onDidChangeModelContent(() => {
+            setModified(modifiedEditor.getValue());
+        });
+    }, []);
 
     return (
         <div className="flex h-screen flex-col bg-zinc-950 font-sans text-zinc-100 overflow-hidden">
@@ -74,113 +88,49 @@ export default function DiffChecker() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {isDiffMode ? (
-                        <>
-                            <button
-                                onClick={() => setInlineDiff(!inlineDiff)}
-                                className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
-                                title={inlineDiff ? "Switch to Split View" : "Switch to Inline View"}
-                            >
-                                {inlineDiff ? <Columns className="h-4 w-4" /> : <Split className="h-4 w-4" />}
-                                <span className="hidden sm:inline">{inlineDiff ? "Split View" : "Inline View"}</span>
-                            </button>
-                            <button
-                                onClick={() => setIsDiffMode(false)}
-                                className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-sm font-medium text-indigo-400 transition-all hover:bg-indigo-500/20 hover:text-indigo-300"
-                            >
-                                <Edit3 className="h-4 w-4" />
-                                <span>Edit Text</span>
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => setIsDiffMode(true)}
-                            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-500 active:scale-95"
-                        >
-                            <Play className="h-4 w-4 fill-current" />
-                            <span>Compare</span>
-                        </button>
-                    )}
+                    <button
+                        onClick={() => setInlineDiff(!inlineDiff)}
+                        className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
+                        title={inlineDiff ? "Switch to Split View" : "Switch to Inline View"}
+                    >
+                        {inlineDiff ? <Columns className="h-4 w-4" /> : <Split className="h-4 w-4" />}
+                        <span className="hidden sm:inline">{inlineDiff ? "Split View" : "Inline View"}</span>
+                    </button>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-hidden relative">
-                {isDiffMode ? (
-                    <div className="h-full w-full opacity-0 animate-[fadeIn_0.3s_ease-out_forwards]">
-                        <DiffEditor
-                            height="100%"
-                            theme="vs-dark"
-                            original={original}
-                            modified={modified}
-                            language={language}
-                            options={{
-                                renderSideBySide: !inlineDiff,
-                                enableSplitViewResizing: true,
-                                fontSize: 14,
-                                minimap: { enabled: false },
-                                scrollBeyondLastLine: false,
-                                automaticLayout: true,
-                                readOnly: true,
-                            }}
-                        />
+            <main className="flex-1 overflow-hidden relative flex flex-col">
+                <div className="flex items-center justify-between bg-zinc-950 px-4 py-2 border-b border-zinc-900 shrink-0">
+                    <div className="flex w-full">
+                        <div className="flex-1 text-xs font-medium uppercase tracking-wider text-zinc-500 text-center">Original</div>
+                        {!inlineDiff && (
+                            <div className="flex-1 text-xs font-medium uppercase tracking-wider text-indigo-400 text-center border-l border-zinc-900">Modified</div>
+                        )}
                     </div>
-                ) : (
-                    <div className="flex h-full flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-zinc-900">
-                        {/* Original Editor */}
-                        <div className="flex flex-1 flex-col overflow-hidden opacity-0 animate-[fadeIn_0.3s_ease-out_forwards]">
-                            <div className="flex items-center justify-between bg-zinc-950 px-4 py-2 border-b border-zinc-900">
-                                <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Original</span>
-                                <div className="text-xs text-zinc-600">Paste your code here</div>
-                            </div>
-                            <Editor
-                                height="100%"
-                                theme="vs-dark"
-                                language={language}
-                                value={original}
-                                onChange={(val) => setOriginal(val || "")}
-                                options={{
-                                    minimap: { enabled: false },
-                                    fontSize: 14,
-                                    padding: { top: 16 },
-                                    scrollBeyondLastLine: false,
-                                    automaticLayout: true,
-                                }}
-                            />
-                        </div>
+                </div>
 
-                        {/* Modified Editor */}
-                        <div className="flex flex-1 flex-col overflow-hidden opacity-0 animate-[fadeIn_0.3s_delay-75ms_ease-out_forwards]">
-                            <div className="flex items-center justify-between bg-zinc-950 px-4 py-2 border-b border-zinc-900">
-                                <span className="text-xs font-medium uppercase tracking-wider text-indigo-400">Modified</span>
-                                <div className="text-xs text-zinc-600">Paste new version here</div>
-                            </div>
-                            <Editor
-                                height="100%"
-                                theme="vs-dark"
-                                language={language}
-                                value={modified}
-                                onChange={(val) => setModified(val || "")}
-                                options={{
-                                    minimap: { enabled: false },
-                                    fontSize: 14,
-                                    padding: { top: 16 },
-                                    scrollBeyondLastLine: false,
-                                    automaticLayout: true,
-                                }}
-                            />
-                        </div>
-                    </div>
-                )}
+                <div className="flex-1 w-full bg-[#1e1e1e]">
+                    <DiffEditor
+                        height="100%"
+                        theme="vs-dark"
+                        original={original}
+                        modified={modified}
+                        language={language}
+                        onMount={handleDiffEditorDidMount}
+                        options={{
+                            renderSideBySide: !inlineDiff,
+                            enableSplitViewResizing: true,
+                            fontSize: 14,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            readOnly: false,
+                            originalEditable: true,
+                        }}
+                    />
+                </div>
             </main>
-
-            {/* Keyframes for animation */}
-            <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(5px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
         </div>
     );
 }

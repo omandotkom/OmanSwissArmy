@@ -18,6 +18,11 @@ export default function Home() {
           description: "Compare text files and highlight differences.",
         },
         {
+          href: "/directory-diff",
+          title: "Directory Comparator",
+          description: "Compare directories and view file differences.",
+        },
+        {
           href: "/regex-tester",
           title: "Regex Tester",
           description: "Test and validate regular expressions.",
