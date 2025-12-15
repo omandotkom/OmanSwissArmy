@@ -182,6 +182,7 @@ export default function DirectoryDiffPage() {
     const [leftFiles, setLeftFiles] = useState<File[]>([]);
     const [rightFiles, setRightFiles] = useState<File[]>([]);
     const [isComparing, setIsComparing] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false); // New state for file processing
     const [progress, setProgress] = useState(0);
     const [currentScannedFile, setCurrentScannedFile] = useState<string>("");
     const [diffTree, setDiffTree] = useState<TreeNode | null>(null);
@@ -189,17 +190,26 @@ export default function DirectoryDiffPage() {
     const [diffStats, setDiffStats] = useState({ same: 0, modified: 0, added: 0, removed: 0 });
 
     const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>, side: "left" | "right") => {
-        if (e.target.files) {
-            const files = Array.from(e.target.files);
-            // Ignore dotfiles files (optional, but good for .git)
-            const filtered = files.filter(f => !f.webkitRelativePath.includes("/.") && !f.name.startsWith("."));
-            if (side === "left") setLeftFiles(filtered);
-            else setRightFiles(filtered);
+        if (e.target.files && e.target.files.length > 0) {
+            setIsProcessing(true); // Show loader immediately
 
-            // Reset state
-            setDiffTree(null);
-            setSelectedNode(null);
-            setProgress(0);
+            // Use setTimeout to yield to the main thread so React can render the spinner
+            // before the heavy filtering/processing starts.
+            const fileList = e.target.files;
+            setTimeout(() => {
+                const files = Array.from(fileList);
+                // Ignore dotfiles files (optional, but good for .git)
+                const filtered = files.filter(f => !f.webkitRelativePath.includes("/.") && !f.name.startsWith("."));
+
+                if (side === "left") setLeftFiles(filtered);
+                else setRightFiles(filtered);
+
+                // Reset state
+                setDiffTree(null);
+                setSelectedNode(null);
+                setProgress(0);
+                setIsProcessing(false); // Hide loader
+            }, 100);
         }
     };
 
@@ -572,8 +582,8 @@ export default function DirectoryDiffPage() {
                 </div>
             </div>
 
-            {/* Scanning Overlay */}
-            {isComparing && (
+            {/* Processing / Scanning Overlay */}
+            {(isComparing || isProcessing) && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="w-full max-w-md p-6 bg-zinc-950 rounded-xl border border-zinc-800 shadow-2xl flex flex-col gap-4">
                         <div className="flex items-center gap-3 border-b border-zinc-900 pb-4">
@@ -581,30 +591,49 @@ export default function DirectoryDiffPage() {
                                 <Loader2 className="animate-spin h-6 w-6 text-indigo-500" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-medium text-zinc-100">Comparing Directories...</h3>
-                                <p className="text-xs text-zinc-500">Scanning and analyzing file differences</p>
+                                <h3 className="text-lg font-medium text-zinc-100">
+                                    {isProcessing ? "Processing Files..." : "Comparing Directories..."}
+                                </h3>
+                                <p className="text-xs text-zinc-500">
+                                    {isProcessing ? "Analyzing structure and filtering files" : "Scanning and analyzing file differences"}
+                                </p>
                             </div>
                         </div>
 
-                        <div>
-                            <div className="flex justify-between text-xs text-zinc-400 mb-2 font-medium">
-                                <span>Progress</span>
-                                <span>{progress}%</span>
+                        {isComparing ? (
+                            <div>
+                                <div className="flex justify-between text-xs text-zinc-400 mb-2 font-medium">
+                                    <span>Progress</span>
+                                    <span>{progress}%</span>
+                                </div>
+                                <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-indigo-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
                             </div>
-                            <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-indigo-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-                                    style={{ width: `${progress}%` }}
-                                />
+                        ) : (
+                            // Indeterminate bar for processing
+                            <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden relative">
+                                <div className="absolute inset-y-0 bg-indigo-500 w-1/3 animate-[shimmer_1s_infinite] shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                                <style jsx>{`
+                                    @keyframes shimmer {
+                                        0% { left: -35%; }
+                                        100% { left: 100%; }
+                                    }
+                                `}</style>
                             </div>
-                        </div>
+                        )}
 
-                        <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
-                            <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1 font-semibold">Current File</p>
-                            <p className="text-xs text-zinc-300 truncate font-mono">
-                                {currentScannedFile || "Initializing..."}
-                            </p>
-                        </div>
+                        {isComparing && (
+                            <div className="bg-zinc-900 rounded-lg p-3 border border-zinc-800">
+                                <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1 font-semibold">Current File</p>
+                                <p className="text-xs text-zinc-300 truncate font-mono">
+                                    {currentScannedFile || "Initializing..."}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
