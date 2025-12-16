@@ -40,6 +40,14 @@ Access 20+ powerful tools to streamline your development workflow:
         - **Encrypted Storage**: Connections are stored locally in browser's IndexedDB with AES encryption.
         - **Test & Auto-Save**: Verify connectivity with a single click; successful tests automatically save the connection profile.
         - **Import/Export**: Securely backup your connection profiles (encrypted file) or import legacy connections from SQL Developer JSON exports.
+    - **Oracle Object Local Backup**: A powerful utility to backup Oracle Database objects (DDL) to your local file system.
+        - **Dual Modes**: Backup **All Objects** from a schema or specific objects defined in an **Excel File**.
+        - **Smart Excel Parsing**: Auto-detects `Owner`, `Object Name`, and `Type` columns with fuzzy matching logic.
+        - **Connection Mapping**: Automatically maps detected owners to your saved connections, supporting multi-schema extraction.
+        - **Clean DDL**: Exports clean DDL scripts (Pretty Print, No Segment Attributes) ready for version control.
+        - **Direct Local Save**: Writes `.sql` files directly to your chosen folder using the File System Access API (Zero downloads folder spam).
+        - **High Performance**: Multi-threaded extraction with configurable concurrency (Default 5 threads, adjustable up to 50).
+        - **Reporting**: Generates a detailed Excel report of successful and failed backups.
 
 ### 📐 Architecture & Design
 - **ERD Designer**: Create and manage Entity Relationship Diagrams visually.
