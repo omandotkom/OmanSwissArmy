@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, Database, Settings2, CheckCircle2, Play, X, Download, FileDiff } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -44,6 +44,25 @@ export default function ObjectDBEnvChecker() {
 
     // Auto-mapping State
     const [availableConnections, setAvailableConnections] = useState<any[]>([]);
+
+    // Computed: Active Owners based on Selection
+    const requiredOwners = useMemo(() => {
+        const owners = new Set<string>();
+        sheets.forEach(sheet => {
+            const selections = selectedRows[sheet.name];
+            if (selections && selections.size > 0) {
+                selections.forEach(rowIndex => {
+                    const row = sheet.data[rowIndex];
+                    // Handle various possible cases for OWNER key
+                    const owner = row['OWNER'] || row['owner'] || row['Owner'];
+                    if (owner) {
+                        owners.add(String(owner).toUpperCase().trim());
+                    }
+                });
+            }
+        });
+        return Array.from(owners).sort();
+    }, [sheets, selectedRows]);
 
     useEffect(() => {
         // Load connections for auto-mapping
@@ -104,8 +123,10 @@ export default function ObjectDBEnvChecker() {
 
         try {
             // 1. Identify involved connections based on OwnerMappings
+            // 1. Identify involved connections based on OwnerMappings
             const uniqueConns = new Map<string, OracleConnection>();
-            detectedOwners.forEach(owner => {
+            // Use requiredOwners instead of detectedOwners to only check relevant connections
+            requiredOwners.forEach(owner => {
                 const map = ownerMappings[owner];
                 if (map?.env1) uniqueConns.set(map.env1.id, map.env1);
                 if (map?.env2) uniqueConns.set(map.env2.id, map.env2);
@@ -269,7 +290,8 @@ export default function ObjectDBEnvChecker() {
 
         // Create tasks (batches)
         const tasks: { owner: string; items: any[] }[] = [];
-        detectedOwners.forEach(owner => {
+        // Use requiredOwners to ensure we only process relevant owners
+        requiredOwners.forEach(owner => {
             const ownerItems = itemsByOwner[owner.toUpperCase()];
             if (!ownerItems) return;
 
@@ -800,10 +822,12 @@ export default function ObjectDBEnvChecker() {
     };
 
     // Validation: Ready to Check?
+    // Validation: Ready to Check?
+    // Only require mappings for owners that are actually selected (requiredOwners)
     const isReadyToCheck =
         file &&
-        detectedOwners.length > 0 &&
-        detectedOwners.every(owner => ownerMappings[owner]?.env1 && ownerMappings[owner]?.env2);
+        requiredOwners.length > 0 &&
+        requiredOwners.every(owner => ownerMappings[owner]?.env1 && ownerMappings[owner]?.env2);
 
     return (
         <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8 font-sans">
@@ -859,15 +883,15 @@ export default function ObjectDBEnvChecker() {
                     </div>
                 )}
 
-                {/* Connection Mapping Section (Shown after upload) */}
-                {!isLoading && file && detectedOwners.length > 0 && (
+                {/* Connection Mapping Section (Shown after upload and selection) */}
+                {!isLoading && file && requiredOwners.length > 0 && (
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-lg font-medium flex items-center gap-2">
                                 <Database className="w-5 h-5 text-purple-500" />
                                 Environment Mapping
                                 <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded-full font-normal">
-                                    {detectedOwners.length} Owner(s) Detected
+                                    {requiredOwners.length} Active Owner(s)
                                 </span>
                             </h2>
 
@@ -891,7 +915,7 @@ export default function ObjectDBEnvChecker() {
                         </div>
 
                         <div className="space-y-3">
-                            {detectedOwners.map(owner => (
+                            {requiredOwners.map(owner => (
                                 <div key={owner} className="grid grid-cols-12 gap-4 items-center bg-zinc-950/50 p-3 rounded-lg border border-zinc-800/50">
                                     <div className="col-span-2 font-mono text-sm text-yellow-500 font-bold truncate" title={owner}>
                                         {owner}
