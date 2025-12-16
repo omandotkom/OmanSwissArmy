@@ -3,7 +3,8 @@ import { encryptData, decryptData } from '@/lib/crypto-utils';
 const DB_NAME = 'OmanSwissArmyDB';
 const STORE_ORACLE = 'oracle_connections';
 const STORE_S3 = 's3_connections';
-const DB_VERSION = 2; // Bump version for S3 Store
+const STORE_GITEA = 'gitea_connections';
+const DB_VERSION = 3; // Bump version for Gitea Store
 
 export interface OracleConnection {
     id: string; // uuid
@@ -14,6 +15,13 @@ export interface OracleConnection {
     username: string;
     password?: string; // Optional, encrypted when stored
     color?: string; // Visual tag
+}
+
+export interface GiteaConnection {
+    id: string; // uuid
+    name: string;
+    url: string;
+    token: string;
 }
 
 export interface S3ConnectionProfile {
@@ -50,6 +58,9 @@ export const initDB = (): Promise<IDBDatabase> => {
             }
             if (!db.objectStoreNames.contains(STORE_S3)) {
                 db.createObjectStore(STORE_S3, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_GITEA)) {
+                db.createObjectStore(STORE_GITEA, { keyPath: 'id' });
             }
         };
     });
@@ -197,6 +208,58 @@ export const deleteS3Connection = async (id: string): Promise<void> => {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_S3], 'readwrite');
         const store = transaction.objectStore(STORE_S3);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+// --- GITEA FUNCTIONS ---
+
+export const saveGiteaConnection = async (connection: GiteaConnection): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_GITEA], 'readwrite');
+        const store = transaction.objectStore(STORE_GITEA);
+
+        const encryptedPayload = encryptData(connection);
+        const itemToSave: EncryptedStorageItem = {
+            id: connection.id,
+            payload: encryptedPayload
+        };
+
+        const request = store.put(itemToSave);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const getAllGiteaConnections = async (): Promise<GiteaConnection[]> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_GITEA], 'readonly');
+        const store = transaction.objectStore(STORE_GITEA);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const results: GiteaConnection[] = [];
+            request.result.forEach((item: any) => {
+                if (item.payload && typeof item.payload === 'string') {
+                    const decrypted = decryptData(item.payload);
+                    if (decrypted) results.push(decrypted);
+                }
+            });
+            resolve(results);
+        };
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const deleteGiteaConnection = async (id: string): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_GITEA], 'readwrite');
+        const store = transaction.objectStore(STORE_GITEA);
         const request = store.delete(id);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);

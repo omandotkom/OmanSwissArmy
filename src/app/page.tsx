@@ -77,6 +77,11 @@ export default function Home() {
           description: "Deploy and manage Oracle DB objects.",
         },
         {
+          href: "/gitea-browser",
+          title: "Gitea Browser",
+          description: "Browse repositories from your Gitea instance.",
+        },
+        {
           href: "/idle-pod-finder",
           title: "Idle Pod Finder",
           description: "Detect inactive pods to save resources.",
