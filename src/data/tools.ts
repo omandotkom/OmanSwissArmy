@@ -42,6 +42,11 @@ export const toolGroups = [
                 title: "String Counter",
                 description: "Count characters, words, and lines.",
             },
+            {
+                href: "/sql-review",
+                title: "AI SQL Code Review",
+                description: "Analyze SQL Stored Procedures for bugs using AI.",
+            },
         ],
     },
     {

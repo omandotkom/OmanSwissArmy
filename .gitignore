@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Large AI Models (Downloaded via start.bat)
+public/models/qwen25coder/
