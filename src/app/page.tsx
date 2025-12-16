@@ -87,6 +87,11 @@ export default function Home() {
           description: "Compare and validate Oracle DB objects between environments.",
         },
         {
+          href: "/oracle-object-backup",
+          title: "Oracle Object Local Backup",
+          description: "Backup Oracle DB objects code to local folder.",
+        },
+        {
           href: "/pvc-analyzer",
           title: "PVC Analyzer",
           description: "Find zombie PVCs, inspect contents, and analyze usage.",
