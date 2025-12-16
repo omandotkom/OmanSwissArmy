@@ -38,7 +38,7 @@ export default function OracleObjectLocalBackup() {
     const [mode, setMode] = useState<'ALL' | 'EXCEL' | null>(null);
 
     // --- Mode: ALL OBJECTS State ---
-    const [selectedConn, setSelectedConn] = useState<OracleConnection | null>(null);
+    const [selectedConns, setSelectedConns] = useState<OracleConnection[]>([]);
     const [isFetchingObjects, setIsFetchingObjects] = useState(false);
 
     // --- Mode: EXCEL State ---
@@ -90,13 +90,24 @@ export default function OracleObjectLocalBackup() {
     // -------------------------------------------------------------------------
     const handleSelectConn = (conn: OracleConnection) => {
         if (mode === 'ALL') {
-            setSelectedConn(conn);
+            if (selectedConns.some(c => c.id === conn.id)) {
+                setIsConnManagerOpen(false);
+                setTimeout(() => {
+                    setAlertModal({ title: "Duplicate Connection", message: `Connection '${conn.name}' is already selected.`, type: 'error' });
+                }, 300);
+                return;
+            }
+            setSelectedConns(prev => [...prev, conn]);
             setIsConnManagerOpen(false);
         } else if (mode === 'EXCEL' && selectingForOwner) {
             setOwnerMappings(prev => ({ ...prev, [selectingForOwner]: conn }));
             setSelectingForOwner(null);
             setIsConnManagerOpen(false);
         }
+    };
+
+    const handleRemoveConn = (connId: string) => {
+        setSelectedConns(prev => prev.filter(c => c.id !== connId));
     };
 
     // -------------------------------------------------------------------------
@@ -185,51 +196,52 @@ export default function OracleObjectLocalBackup() {
         let items: BackupItem[] = [];
 
         if (mode === 'ALL') {
-            if (!selectedConn) return;
+            if (selectedConns.length === 0) return;
 
-            // 1. Check Connection First
             setIsCheckingConnection(true);
+            setIsFetchingObjects(true);
+
             try {
-                const testRes = await fetch('/api/oracle/test-connection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(selectedConn)
-                });
-                if (!testRes.ok) {
-                    const data = await testRes.json();
-                    throw new Error(data.error || "Connection Failed");
+                for (const conn of selectedConns) {
+                    // 1. Check Connection
+                    const testRes = await fetch('/api/oracle/test-connection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(conn)
+                    });
+                    if (!testRes.ok) {
+                        const data = await testRes.json();
+                        throw new Error(`Connection [${conn.name}] Failed: ${data.error || "Unknown Error"}`);
+                    }
+
+                    // 2. Fetch Objects
+                    const res = await fetch('/api/oracle/list-objects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ connection: conn })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(`Fetch objects for [${conn.name}] Failed: ${data.error}`);
+
+                    const connItems = data.objects.map((obj: any, idx: number) => ({
+                        id: `all-${conn.id}-${idx}`,
+                        owner: conn.username,
+                        name: obj.name,
+                        type: obj.type,
+                        conn: conn,
+                        status: 'PENDING'
+                    }));
+                    items = [...items, ...connItems];
                 }
+
             } catch (error: any) {
                 setIsCheckingConnection(false);
-                setAlertModal({ title: "Connection Error", message: "Failed to connect to database: " + error.message, type: 'error' });
-                return;
-            }
-
-            // 2. Fetch Objects
-            setIsFetchingObjects(true);
-            setIsCheckingConnection(false); // Done checking, now fetching
-
-            try {
-                const res = await fetch('/api/oracle/list-objects', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ connection: selectedConn })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
-
-                items = data.objects.map((obj: any, idx: number) => ({
-                    id: `all-${idx}`,
-                    owner: selectedConn.username,
-                    name: obj.name,
-                    type: obj.type,
-                    conn: selectedConn,
-                    status: 'PENDING'
-                }));
-            } catch (error: any) {
-                setAlertModal({ title: "Fetch Error", message: "Failed to fetch objects: " + error.message, type: 'error' });
+                setIsFetchingObjects(false);
+                setAlertModal({ title: "Error", message: error.message, type: 'error' });
                 return;
             } finally {
+                setIsCheckingConnection(false);
                 setIsFetchingObjects(false);
             }
         } else {
@@ -452,33 +464,48 @@ export default function OracleObjectLocalBackup() {
     );
 
     const renderStep2All = () => (
-        <div className="max-w-2xl mx-auto bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
-            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Database className="w-5 h-5 text-blue-500" />
-                Select Source Database
-            </h2>
+        <div className="max-w-3xl mx-auto bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Database className="w-5 h-5 text-blue-500" />
+                    Select Source Databases
+                </h2>
+                <button
+                    onClick={() => { setSelectingForOwner(null); setIsConnManagerOpen(true); }}
+                    className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                    + Add Connection
+                </button>
+            </div>
 
-            <div className="mb-8">
-                {!selectedConn ? (
-                    <button
-                        onClick={() => { setSelectingForOwner(null); setIsConnManagerOpen(true); }}
-                        className="w-full py-4 border-2 border-dashed border-zinc-700 rounded-xl text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors flex flex-col items-center justify-center gap-2"
-                    >
-                        <Database className="w-8 h-8 opacity-50" />
-                        Click to Select Connection
-                    </button>
+            <div className="mb-8 space-y-4">
+                {selectedConns.length === 0 ? (
+                    <div className="p-8 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400">
+                        <Database className="w-10 h-10 mb-2 opacity-30" />
+                        <p>No connections selected.</p>
+                        <p className="text-sm">Click "Add Connection" to start.</p>
+                    </div>
                 ) : (
-                    <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
-                        <div>
-                            <p className="font-bold text-zinc-200">{selectedConn.name}</p>
-                            <p className="text-sm text-zinc-500">{selectedConn.username}@{selectedConn.host}</p>
-                        </div>
-                        <button
-                            onClick={() => { setSelectingForOwner(null); setIsConnManagerOpen(true); }}
-                            className="text-sm text-blue-400 hover:underline"
-                        >
-                            Change
-                        </button>
+                    <div className="grid gap-3">
+                        {selectedConns.map((conn, idx) => (
+                            <div key={conn.id} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex justify-between items-center group">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold border border-blue-500/20">
+                                        {idx + 1}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-zinc-200">{conn.name}</p>
+                                        <p className="text-sm text-zinc-500">{conn.username}@{conn.host}:{conn.port}/{conn.serviceName}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleRemoveConn(conn.id)}
+                                    className="text-sm text-red-500 hover:text-red-400 opacity-60 hover:opacity-100 px-3 py-1 transition-all border border-transparent hover:border-red-900 rounded"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
@@ -486,7 +513,7 @@ export default function OracleObjectLocalBackup() {
             <div className="flex justify-end">
                 <button
                     onClick={prepareBackup}
-                    disabled={!selectedConn || isFetchingObjects || isCheckingConnection}
+                    disabled={selectedConns.length === 0 || isFetchingObjects || isCheckingConnection}
                     className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <ArrowRight className="w-4 h-4" />
