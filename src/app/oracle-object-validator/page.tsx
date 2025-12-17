@@ -11,7 +11,12 @@ export default function OracleObjectValidatorPage() {
             description: "Compare Oracle DB objects across different environments. Easily compare and compile objects, with features for Excel reporting and whitespace-agnostic validation.",
             icon: <CheckCircle className="h-6 w-6 text-emerald-400" />,
         },
-        // Future features can be added here
+        {
+            href: "/oracle-object-validator/env-data-checker",
+            title: "Env Data Checker",
+            description: "Compare data/content of tables between two environments. Identify missing rows or value discrepancies with column-level control.",
+            icon: <Database className="h-6 w-6 text-blue-400" />,
+        },
     ];
 
     return (

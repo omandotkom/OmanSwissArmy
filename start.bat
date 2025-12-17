@@ -29,17 +29,12 @@ echo [OK] Node.js is ready.
 :: ---------------------------------------------------
 echo.
 echo [+] Verify dependencies...
-call npm install
+call npm install --registry=https://nexus.apps.ocp.sm.co.id/repository/npm-proxy
 if %errorlevel% neq 0 (
     echo.
-    echo [WARNING] Standard npm install failed. Retrying with corporate proxy...
-    call npm install --registry=https://nexus.apps.ocp.sm.co.id/repository/npm-proxy
-    if %errorlevel% neq 0 (
-        echo.
-        echo [ERROR] npm install failed. Check VPN/Internet.
-        pause
-        exit /b 1
-    )
+    echo [ERROR] npm install failed. Check VPN/Internet.
+    pause
+    exit /b 1
 )
 echo [OK] Dependencies installed.
 
