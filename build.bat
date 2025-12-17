@@ -24,6 +24,22 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo ==========================================
+echo      FINALIZING STANDALONE BUILD
+echo ==========================================
+echo.
+
+echo Copying 'public' folder (Models & Assets)...
+xcopy /E /I /Y public .next\standalone\public >nul
+
+echo Copying 'bin' folder (OC Executable)...
+xcopy /E /I /Y bin .next\standalone\bin >nul
+
+echo Copying '.next/static' folder...
+xcopy /E /I /Y .next\static .next\standalone\.next\static >nul
+
+
+echo.
+echo ==========================================
 echo            BUILD SUCCESSFUL ✅
 echo ==========================================
 echo.
