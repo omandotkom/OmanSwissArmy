@@ -65,6 +65,7 @@ export default function EnvDataChecker() {
     const [isComparing, setIsComparing] = useState(false);
     const [results, setResults] = useState<Map<string, ComparisonResult>>(new Map());
     const [showResults, setShowResults] = useState(false);
+    const [viewingDiff, setViewingDiff] = useState<{ table: string, result: ComparisonResult } | null>(null);
 
     useEffect(() => {
         getAllConnections().then(setConnections);
@@ -105,28 +106,53 @@ export default function EnvDataChecker() {
     const handleFetchTables = async () => {
         if (!sourceConn) return;
 
-        // 1. Connection Check
-        setConnectionCheckStatus([{
+        // 1. Prepare Connection Checks
+        const checks: CheckStatus[] = [{
             id: sourceConn.id,
             name: sourceConn.name,
             host: sourceConn.host,
             status: 'testing'
-        }]);
+        }];
+
+        if (targetConn) {
+            checks.push({
+                id: targetConn.id,
+                name: targetConn.name,
+                host: targetConn.host,
+                status: 'testing'
+            });
+        }
+
+        setConnectionCheckStatus(checks);
 
         try {
-            const testRes = await fetch('/api/oracle/test-connection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(sourceConn)
+            // Run checks in parallel
+            const checkPromises = checks.map(async (check) => {
+                const conn = check.id === sourceConn.id ? sourceConn : targetConn!;
+                try {
+                    const res = await fetch('/api/oracle/test-connection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(conn)
+                    });
+                    if (!res.ok) {
+                        const data = await res.json();
+                        return { ...check, status: 'error', message: data.error || 'Failed' } as CheckStatus;
+                    }
+                    return { ...check, status: 'success' } as CheckStatus;
+                } catch (e) {
+                    return { ...check, status: 'error', message: "Network Error" } as CheckStatus;
+                }
             });
 
-            if (!testRes.ok) {
-                const data = await testRes.json();
-                setConnectionCheckStatus(prev => prev?.map(c => ({ ...c, status: 'error', message: data.error || 'Failed' })) || null);
+            const results = await Promise.all(checkPromises);
+            setConnectionCheckStatus(results);
+
+            // If any failed, stop here
+            if (results.some(r => r.status === 'error')) {
                 return;
             }
 
-            setConnectionCheckStatus(prev => prev?.map(c => ({ ...c, status: 'success' })) || null);
             await new Promise(r => setTimeout(r, 800)); // Small delay for UX
             setConnectionCheckStatus(null);
 
@@ -147,24 +173,31 @@ export default function EnvDataChecker() {
             }
         } catch (error) {
             console.error(error);
-            setConnectionCheckStatus(prev => prev?.map(c => ({ ...c, status: 'error', message: "Network Error" })) || null);
+            // This global catch might be redundant given the inner try-catch, but safe to keep
+            setConnectionCheckStatus(prev => prev?.map(c => ({ ...c, status: 'error', message: "Unexpected Error" })) || null);
         } finally {
             setIsLoadingTables(false);
         }
     };
 
-    const handleTableToggle = async (tableName: string) => {
+    const handleTableClick = async (tableName: string) => {
+        setActiveTable(tableName);
+        // Fetch Columns if not already fetched
+        if (!tableColumns.has(tableName)) {
+            await fetchColumns(tableName);
+        }
+    };
+
+    const handleSelectionToggle = (tableName: string, e: React.MouseEvent) => {
+        e.stopPropagation();
         const newSet = new Set(selectedTables);
         if (newSet.has(tableName)) {
             newSet.delete(tableName);
-            if (activeTable === tableName) setActiveTable(null);
         } else {
             newSet.add(tableName);
-            setActiveTable(tableName); // Auto focus on add
-
             // Fetch Columns if not already fetched
             if (!tableColumns.has(tableName)) {
-                await fetchColumns(tableName);
+                fetchColumns(tableName);
             }
         }
         setSelectedTables(newSet);
@@ -344,12 +377,13 @@ export default function EnvDataChecker() {
                                     key={tbl.name}
                                     className={`flex items-center gap-2 p-2 rounded cursor-pointer text-sm transition-colors ${activeTable === tbl.name ? 'bg-blue-900/30 border border-blue-500/30' : 'hover:bg-zinc-800'
                                         }`}
-                                    onClick={() => handleTableToggle(tbl.name)}
+                                    onClick={() => handleTableClick(tbl.name)}
                                 >
                                     <input
                                         type="checkbox"
                                         checked={selectedTables.has(tbl.name)}
-                                        readOnly
+                                        onChange={() => { }}
+                                        onClick={(e) => handleSelectionToggle(tbl.name, e)}
                                         className="rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-offset-zinc-900"
                                     />
                                     <span className={`flex-1 truncate font-mono ${selectedTables.has(tbl.name) ? 'text-white' : 'text-zinc-400'}`}>
@@ -497,7 +531,7 @@ export default function EnvDataChecker() {
             )}
 
             {/* Results Modal */}
-            {showResults && (
+            {showResults && !viewingDiff && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl">
                         <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-950 rounded-t-xl">
@@ -512,6 +546,19 @@ export default function EnvDataChecker() {
                             <button onClick={() => setShowResults(false)} className="p-2 hover:bg-zinc-800 rounded-full">
                                 <X className="w-5 h-5 text-zinc-400" />
                             </button>
+                        </div>
+
+                        {/* Connection Info Bar */}
+                        <div className="flex items-center gap-6 px-4 py-2 bg-zinc-900 border-b border-zinc-800 text-xs font-mono">
+                            <div className="flex items-center gap-2">
+                                <span className="text-zinc-500 uppercase font-bold">Source:</span>
+                                <span className="text-blue-400">{sourceConn?.name} ({sourceConn?.host})</span>
+                            </div>
+                            <div className="w-px h-4 bg-zinc-700" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-zinc-500 uppercase font-bold">Target:</span>
+                                <span className="text-emerald-400">{targetConn?.name} ({targetConn?.host})</span>
+                            </div>
                         </div>
                         {selectedTables.size > 0 && (
                             <div className="h-1 w-full bg-zinc-900 relative">
@@ -551,12 +598,20 @@ export default function EnvDataChecker() {
                                             <tr key={tbl} className="hover:bg-zinc-800/30">
                                                 <td className="p-3 font-mono font-medium text-white">{tbl}</td>
                                                 <td className="p-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${res.status === 'MATCH' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30' :
-                                                        res.status === 'DIFF' ? 'bg-orange-900/30 text-orange-400 border border-orange-500/30' :
+                                                    {res.status === 'DIFF' ? (
+                                                        <button
+                                                            onClick={() => setViewingDiff({ table: tbl, result: res })}
+                                                            className="px-3 py-1 rounded-full text-xs font-bold bg-orange-900/30 text-orange-400 border border-orange-500/30 hover:bg-orange-500 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            DIFF <Search className="w-3 h-3" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${res.status === 'MATCH' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30' :
                                                             'bg-red-900/30 text-red-400 border border-red-500/30'
-                                                        }`}>
-                                                        {res.status}
-                                                    </span>
+                                                            }`}>
+                                                            {res.status}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3">{res.stats?.sourceTotal ?? '-'}</td>
                                                 <td className="p-3">{res.stats?.targetTotal ?? '-'}</td>
@@ -575,6 +630,91 @@ export default function EnvDataChecker() {
                                             </tr>
                                         );
                                     })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Data Diff Viewer Modal */}
+            {viewingDiff && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="w-full h-full flex flex-col">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-900">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setViewingDiff(null)}
+                                    className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                                >
+                                    <ArrowLeft className="w-6 h-6" />
+                                </button>
+                                <div>
+                                    <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                                        <TableIcon className="text-blue-500" />
+                                        Diff Viewer: {viewingDiff.table}
+                                    </h2>
+                                    <div className="flex items-center gap-3 text-xs font-mono mt-1 text-zinc-400">
+                                        <span>{sourceConn?.name} vs {targetConn?.name}</span>
+                                    </div>
+                                    <div className="flex gap-4 text-xs font-mono mt-1">
+                                        <span className="flex items-center gap-1 text-red-400">
+                                            <div className="w-2 h-2 bg-red-500/50 rounded-full" />
+                                            Source Only: {viewingDiff.result.stats.sourceOnlyCount}
+                                        </span>
+                                        <span className="flex items-center gap-1 text-green-400">
+                                            <div className="w-2 h-2 bg-green-500/50 rounded-full" />
+                                            Target Only: {viewingDiff.result.stats.targetOnlyCount}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setViewingDiff(null)}
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm"
+                            >
+                                Close Viewer
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-auto bg-zinc-950">
+                            <table className="w-full text-left text-sm border-collapse">
+                                <thead className="bg-zinc-900/90 text-zinc-500 uppercase text-xs font-bold sticky top-0 z-10 backdrop-blur-sm shadow-sm">
+                                    <tr>
+                                        <th className="p-3 border-b border-zinc-800 w-10">Origin</th>
+                                        {tableColumns.get(viewingDiff.table)?.filter(c => selectedColumns.get(viewingDiff.table)?.has(c.name)).map(col => (
+                                            <th key={col.name} className="p-3 border-b border-zinc-800 whitespace-nowrap">
+                                                {col.name}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-800/50">
+                                    {viewingDiff.result.diffs.map((diff, idx) => (
+                                        <tr key={idx} className={`font-mono text-xs hover:opacity-80 transition-opacity ${diff.type === 'SOURCE_ONLY'
+                                            ? 'bg-red-500/10 hover:bg-red-500/20 text-red-100'
+                                            : 'bg-green-500/10 hover:bg-green-500/20 text-green-100'
+                                            }`}>
+                                            <td className="p-3 border-r border-white/5 font-bold whitespace-nowrap">
+                                                {diff.type === 'SOURCE_ONLY' ? 'SRC' : 'TGT'}
+                                            </td>
+                                            {tableColumns.get(viewingDiff.table)?.filter(c => selectedColumns.get(viewingDiff.table)?.has(c.name)).map(col => (
+                                                <td key={col.name} className="p-3 border-r border-white/5 whitespace-nowrap max-w-xs truncate">
+                                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                    {String((diff.data as any)[col.name] ?? '')}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                    {viewingDiff.result.diffs.length === 0 && (
+                                        <tr>
+                                            <td colSpan={100} className="p-8 text-center text-zinc-500">
+                                                No differences to display.
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
