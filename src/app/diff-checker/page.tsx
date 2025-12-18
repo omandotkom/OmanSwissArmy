@@ -17,6 +17,9 @@ const Columns = (props: SVGProps<SVGSVGElement>) => (
 const Code2 = (props: SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m18 16 4-4-4-4" /><path d="m6 8-4 4 4 4" /><path d="m14.5 4-5 16" /></svg>
 )
+const Search = (props: SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+)
 
 const LANGUAGES = [
     { id: "plaintext", label: "Plain Text" },
@@ -54,6 +57,18 @@ export default function DiffChecker() {
         modifiedEditor.onDidChangeModelContent(() => {
             setModified(modifiedEditor.getValue());
         });
+    }, []);
+
+    const triggerFind = useCallback((isOriginal: boolean) => {
+        if (!diffEditorRef.current) return;
+        const editor = isOriginal
+            ? diffEditorRef.current.getOriginalEditor()
+            : diffEditorRef.current.getModifiedEditor();
+
+        if (editor) {
+            editor.focus();
+            editor.trigger("source", "actions.find");
+        }
     }, []);
 
     return (
@@ -101,11 +116,29 @@ export default function DiffChecker() {
 
             {/* Main Content */}
             <main className="flex-1 overflow-hidden relative flex flex-col">
-                <div className="flex items-center justify-between bg-zinc-950 px-4 py-2 border-b border-zinc-900 shrink-0">
+                <div className="flex items-center justify-between bg-zinc-950 border-b border-zinc-900 shrink-0">
                     <div className="flex w-full">
-                        <div className="flex-1 text-xs font-medium uppercase tracking-wider text-zinc-500 text-center">Original</div>
+                        <div className="flex-1 flex items-center justify-between px-4 py-2 border-r border-zinc-900">
+                            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Original</span>
+                            <button
+                                onClick={() => triggerFind(true)}
+                                className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                title="Find in Original (Ctrl+F)"
+                            >
+                                <Search className="h-4 w-4" />
+                            </button>
+                        </div>
                         {!inlineDiff && (
-                            <div className="flex-1 text-xs font-medium uppercase tracking-wider text-indigo-400 text-center border-l border-zinc-900">Modified</div>
+                            <div className="flex-1 flex items-center justify-between px-4 py-2">
+                                <span className="text-xs font-medium uppercase tracking-wider text-indigo-400">Modified</span>
+                                <button
+                                    onClick={() => triggerFind(false)}
+                                    className="p-1 rounded hover:bg-zinc-800 text-indigo-400 hover:text-indigo-300 transition-colors"
+                                    title="Find in Modified (Ctrl+F)"
+                                >
+                                    <Search className="h-4 w-4" />
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
