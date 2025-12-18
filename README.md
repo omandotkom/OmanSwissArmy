@@ -31,13 +31,20 @@ Access powerful tools to streamline your development workflow, categorized by fu
     - **File Operations**: Browse buckets, folders, and securely download files.
 
 ### 🗄️ Database & DevOps
-- **Deploy Oracle DB**:
-    - **Excel-Driven Deployment**: Upload an Excel file containing a list of objects to deploy.
-    - **Smart Mapping**: Automatically maps schema owners found in the file to your saved connections (e.g., Map 'HR_DEV' source to 'HR_PROD' target).
-    - **Connection integration**: Seamlessly uses stored database profiles.
+- **Oracle Object Backup**:
+    - **Local DDL Dump**: Stream DDL (Tables, Views, SPs, etc.) from Oracle directly to your local file system.
+    - **Excel Batch Processing**: Upload an Excel file defining exactly which objects to backup for which owner.
+    - **Concurrent Processing**: Multi-threaded fetching for backing up thousands of objects in seconds.
+    - **Connection Mapping**: flexible source selection for multi-schema backups.
 - **Oracle Object Validator**: 
-    - **Env Checker**: Compare database objects across environments with whitespace-agnostic logic.
-    - **Diff Viewer**: Side-by-side Monaco Editor to verify PL/SQL changes.
+    - **Env Checker**: Compare database objects keys across environments.
+    - **Three Way Comparison (New!)**: 
+        - **Deep Analysis**: Concurrent comparison of thousands of objects (Master vs Slave vs Excel) using connection pools.
+        - **Smart DDL Normalization**: Ignores system constraints (`SYS_C...`) and table column order to prevent false positives.
+        - **Diff Viewer**: Integrated side-by-side Monaco Diff Editor to inspect code changes.
+    - **Env Data Checker (New!)**: 
+        - **Data Integrity**: Verify row counts and content consistency across environments.
+        - **Dynamic Mapping**: Flexible column selection and auto-mapping of tables.
     - **Auto-Sync**: Push changes from Source to Target directly.
 - **Connection Manager**:
     - **Secure Storage**: Oracle DB credentials stored locally encrypted (AES).
@@ -61,15 +68,32 @@ Access powerful tools to streamline your development workflow, categorized by fu
 - **Hash Generator**: Generate MD5, SHA-1, SHA-256, SHA-512 hashes.
 - **Password Generator**: Create cryptographically strong passwords.
 
-### 🎨 Design & Utilities
+### 🛠️ Web & Text Utilities
+- **Converters**:
+    - **JSON to Code**: Convert JSON objects into **TypeScript**, **Go**, **Java**, or **Rust** structs instantly.
+    - **HTML Entity**: Encode/Decode special characters for safe HTML embedding.
+    - **URL Encoder**: Safe URL encoding/decoding for query parameters.
+    - **Timestamp Converter**: Convert Unix/Epoch timestamps to Human-readable dates and vice-versa.
+- **Generators**:
+    - **UUID Generator**: Bulk formulate v4 UUIDs.
+    - **Lorem Ipsum**: Generate placeholder text for design mockups.
+    - **Meta Tag Generator**: Create SEO-ready meta tags for your websites.
+- **Analyzers**:
+    - **Regex Tester**: Test and validate regular expressions against text.
+    - **String Counter**: Analyze text character count, word count, and line count.
+- **Formatters**: 
+    - **JSON Formatter**: Pretty-print and validate JSON.
+    - **SQL Formatter**: Standardize SQL queries.
+
+### 🎨 Design & Visuals
 - **Number to Words**:
     - **Currency Support**: Convert numbers to text (terbilang) for **IDR (Rupiah)** and **USD (Dollars)**.
-    - **Copy Ready**: One-click copy for invoice/report generation.
 - **ERD & Flowchart Designer**:
     - **Visual Modeling**: Drag-and-drop interface creating database schemas and logic flows.
     - **SQL Generation**: Auto-generate DDL from diagrams.
-- **Design Tools**: Color Converter (HEX/RGB/HSL), Image Converter (WebP/PNG/JPG), QR Code Generator.
-- **Formatters**: JSON Formatter, SQL Formatter.
+- **Markdown Preview**: Real-time markdown editor and split-pane previewer.
+- **Image Converter**: Convert images between WebP, PNG, and JPG formats.
+- **Design Tools**: Color Converter (HEX/RGB/HSL), QR Code Generator.
 
 ## 🛠️ Tech Stack
 
