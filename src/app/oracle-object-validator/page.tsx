@@ -17,6 +17,12 @@ export default function OracleObjectValidatorPage() {
             description: "Compare data/content of tables between two environments. Identify missing rows or value discrepancies with column-level control.",
             icon: <Database className="h-6 w-6 text-blue-400" />,
         },
+        {
+            href: "/oracle-object-validator/three-way-comparison",
+            title: "Three Way Comparison",
+            description: "Deep analysis of objects across Master (Higher Environment), Slave (Lower Environment), and Excel Object DB. Detect unlisted changes and sync status.",
+            icon: <Settings className="h-6 w-6 text-purple-400" />,
+        },
     ];
 
     return (
