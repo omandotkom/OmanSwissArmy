@@ -40,11 +40,12 @@ export default function ThreeWayComparisonPage() {
     // Preview Logic state
     const [isViewModalOpen, setViewModalOpen] = useState(false);
     const [previewData, setPreviewData] = useState<any[]>([]);
+    const [previewPage, setPreviewPage] = useState(1);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
     // Diff Viewer State
     const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
-    const [diffContent, setDiffContent] = useState<{ master: string, slave: string, title: string }>({ master: '', slave: '', title: '' });
+    const [diffContent, setDiffContent] = useState<{ master: string, slave: string, patch: string, title: string }>({ master: '', slave: '', patch: '', title: '' });
     const [isLoadingDiff, setIsLoadingDiff] = useState(false);
 
     const [jobLogs, setJobLogs] = useState<string[]>([]);
@@ -242,6 +243,7 @@ export default function ThreeWayComparisonPage() {
         setViewModalOpen(true);
         setIsLoadingPreview(true);
         setPreviewData([]);
+        setPreviewPage(1); // Reset to page 1
 
         try {
             const response = await fetch(`/api/oracle/three-way-stream?jobId=${jobId}&download=true`);
@@ -251,26 +253,20 @@ export default function ThreeWayComparisonPage() {
             const decoder = new TextDecoder();
             let csvText = '';
 
-            let bytesRead = 0;
-            const MAX_PREVIEW_BYTES = 500 * 1024; // 500KB for ~300 rows
-
+            // Read FULL Content for client-side pagination
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-
                 csvText += decoder.decode(value, { stream: true });
-                bytesRead += value.length;
-
-                if (bytesRead > MAX_PREVIEW_BYTES) {
-                    await reader.cancel();
-                    break;
-                }
             }
 
             const lines = csvText.split('\n').filter(l => l.trim().length > 0);
+            if (lines.length === 0) return;
+
             const headers = lines[0].split(',').map(h => h.trim());
 
-            const rows = lines.slice(1, 301).map(line => {
+            // Parse ALL rows
+            const rows = lines.slice(1).map(line => {
                 const safeValues: string[] = [];
                 let current = '';
                 let inQuote = false;
@@ -321,7 +317,7 @@ export default function ThreeWayComparisonPage() {
 
         setIsDiffModalOpen(true);
         setIsLoadingDiff(true);
-        setDiffContent({ master: '', slave: '', title: `${owner}.${name} (${type})` });
+        setDiffContent({ master: '', slave: '', patch: '', title: `${owner}.${name} (${type})` });
 
         try {
             const res = await fetch('/api/oracle/fetch-ddl-diff', {
@@ -339,12 +335,13 @@ export default function ThreeWayComparisonPage() {
             setDiffContent({
                 master: data.masterDDL,
                 slave: data.slaveDDL,
+                patch: data.patchScript || '-- No Generated Patch',
                 title: `${owner}.${name} (${type})`
             });
 
         } catch (e: any) {
             alert("Failed to fetch DDL: " + e.message);
-            setDiffContent(prev => ({ ...prev, master: 'Error fetching DDL', slave: 'Error fetching DDL' }));
+            setDiffContent(prev => ({ ...prev, master: 'Error fetching DDL', slave: 'Error fetching DDL', patch: 'Error fetching DDL' }));
         } finally {
             setIsLoadingDiff(false);
         }
@@ -647,7 +644,7 @@ export default function ThreeWayComparisonPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-                                        {previewData.map((row, idx) => (
+                                        {previewData.slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
                                             <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
                                                 {Object.entries(row).map(([key, val]: [string, any], cIdx) => {
                                                     const isConclusion = key === 'CONCLUSION';
@@ -660,8 +657,10 @@ export default function ThreeWayComparisonPage() {
                                                             onClick={() => isDiffable && handleViewDiff(row)}
                                                         >
                                                             {isDiffable && (
-                                                                <span className="hidden group-hover:inline absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 text-blue-500">
-                                                                    <Eye className="w-4 h-4" />
+                                                                <span className="hidden group-hover:inline absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 text-blue-500 flex gap-1">
+                                                                    <button title="View Diff" onClick={(e) => { e.stopPropagation(); handleViewDiff(row); }} className="p-1 hover:bg-zinc-800 rounded">
+                                                                        <Eye className="w-4 h-4" />
+                                                                    </button>
                                                                 </span>
                                                             )}
                                                             {val === 'YES' ? <span className="text-emerald-500 font-bold text-xs bg-emerald-900/20 px-2 py-0.5 rounded">YES</span> :
@@ -678,17 +677,39 @@ export default function ThreeWayComparisonPage() {
                         </div>
 
                         <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 rounded-b-xl flex justify-between items-center">
-                            <div className="text-xs text-zinc-500">
-                                * This is a partial preview. Download the full CSV for comprehensive analysis.
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
+                                    disabled={previewPage === 1}
+                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-sm text-zinc-400">
+                                    Page <span className="text-white font-bold">{previewPage}</span> of <span className="text-white font-bold">{Math.ceil((previewData.length || 1) / 200)}</span>
+                                </span>
+                                <button
+                                    onClick={() => setPreviewPage(p => Math.min(Math.ceil(previewData.length / 200), p + 1))}
+                                    disabled={previewPage >= Math.ceil(previewData.length / 200)}
+                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors"
+                                >
+                                    Next
+                                </button>
                             </div>
-                            <button onClick={() => setViewModalOpen(false)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white text-sm font-medium">
-                                Close Preview
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <span className="text-xs text-zinc-500 hidden md:inline">
+                                    Total {previewData.length.toLocaleString()} rows loaded.
+                                </span>
+                                <button onClick={() => setViewModalOpen(false)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white text-sm font-medium">
+                                    Close Preview
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
-            {/* Diff Viewer Modal */}
+
+            {/* Diff Viewer Modal With Patch Script */}
             {isDiffModalOpen && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="w-full h-full max-w-[95vw] max-h-[95vh] bg-zinc-950 rounded-xl border border-zinc-800 shadow-2xl flex flex-col">
@@ -698,31 +719,62 @@ export default function ThreeWayComparisonPage() {
                                     <Code2 className="text-orange-500" /> Diff Viewer: <span className="text-zinc-400 font-mono text-base">{diffContent.title}</span>
                                 </h3>
                             </div>
-                            <button onClick={() => setIsDiffModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
-                                <X className="h-6 w-6" />
-                            </button>
+                            <div className="flex gap-2">
+                                <button className="p-2 bg-blue-900/40 text-blue-200 hover:bg-blue-800 rounded text-xs font-semibold flex items-center gap-1"
+                                    onClick={() => {
+                                        const blob = new Blob([diffContent.patch], { type: 'text/sql' });
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `PATCH_${diffContent.title.replace(/[^a-zA-Z0-9]/g, '_')}.sql`;
+                                        a.click();
+                                    }}>
+                                    <FileSpreadsheet className="w-3 h-3" /> Download Patch Script
+                                </button>
+                                <button onClick={() => setIsDiffModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                                    <X className="h-6 w-6" />
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="flex-1 min-h-0 relative bg-[#1e1e1e]">
+                        <div className="flex-1 min-h-0 relative bg-[#1e1e1e] flex flex-col">
                             {isLoadingDiff && (
                                 <div className="absolute inset-0 z-10 bg-zinc-900/50 flex items-center justify-center">
                                     <Loader2 className="h-10 w-10 animate-spin text-orange-500" />
                                 </div>
                             )}
-                            <DiffEditor
-                                height="100%"
-                                theme="vs-dark"
-                                original={diffContent.master}
-                                modified={diffContent.slave}
-                                language="sql"
-                                options={{
-                                    readOnly: true,
-                                    renderSideBySide: true,
-                                    minimap: { enabled: false },
-                                    scrollBeyondLastLine: false,
-                                    fontSize: 12
-                                }}
-                            />
+
+                            <div className="flex-1 relative">
+                                <DiffEditor
+                                    height="100%"
+                                    theme="vs-dark"
+                                    original={diffContent.master}
+                                    modified={diffContent.slave}
+                                    language="sql"
+                                    options={{
+                                        readOnly: true,
+                                        renderSideBySide: true,
+                                        minimap: { enabled: false },
+                                        scrollBeyondLastLine: false,
+                                        fontSize: 12
+                                    }}
+                                />
+                            </div>
+
+                            {/* Patch Script Preview (Bottom Pane) */}
+                            {diffContent.patch && (
+                                <div className="h-[30%] border-t border-zinc-700 bg-zinc-900 flex flex-col">
+                                    <div className="px-4 py-1 bg-zinc-950 text-xs text-green-500 font-bold border-b border-zinc-800 flex justify-between">
+                                        <span>AUTO-GENERATED PATCH SCRIPT (SLAVE -&gt; MASTER)</span>
+                                        <span>{diffContent.patch.includes("SMART") ? "✨ Smart Alter" : "Standard Replace"}</span>
+                                    </div>
+                                    <textarea
+                                        readOnly
+                                        value={diffContent.patch}
+                                        className="w-full h-full bg-[#1e1e1e] text-zinc-300 font-mono text-xs p-4 resize-none focus:outline-none"
+                                    />
+                                </div>
+                            )}
                         </div>
                         <div className="p-2 bg-zinc-900 border-t border-zinc-800 text-xs text-zinc-500 flex justify-between px-4">
                             <span>Left: Master (Source)</span>

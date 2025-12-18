@@ -284,7 +284,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                         SELECT owner, object_name, object_type, last_ddl_time, status
                         FROM all_objects
                         WHERE owner IN (${ownersList})
-                        AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX', 'INDEX PARTITION', 'TABLE PARTITION', 'SEQUENCE')
+                        AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX PARTITION', 'TABLE PARTITION')
                         AND object_name NOT LIKE 'BIN$%'
                         ORDER BY owner, object_name, object_type
                     `;
@@ -315,7 +315,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                         SELECT owner, object_name, object_type, last_ddl_time, status
                         FROM all_objects
                         WHERE owner IN (${ownersList})
-                        AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX', 'INDEX PARTITION', 'TABLE PARTITION', 'SEQUENCE')
+                        AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX PARTITION', 'TABLE PARTITION')
                         AND object_name NOT LIKE 'BIN$%'
                         ORDER BY owner, object_name, object_type
                     `;
