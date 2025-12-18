@@ -9,7 +9,7 @@ export const toolGroups = [
             },
             {
                 href: "/diff-checker",
-                title: "Diff Checker",
+                title: "Text Compare",
                 description: "Compare text files and highlight differences.",
             },
             {
@@ -46,6 +46,7 @@ export const toolGroups = [
                 href: "/sql-review",
                 title: "AI SQL Code Review",
                 description: "Analyze SQL Stored Procedures for bugs using AI.",
+                dependency: "ai",
             },
         ],
     },
@@ -61,6 +62,7 @@ export const toolGroups = [
                 href: "/cluster-doctor",
                 title: "Cluster Doctor",
                 description: "Diagnose stuck builds and cluster health.",
+                dependency: "oc",
             },
             {
                 href: "/cron-generator",
@@ -81,6 +83,7 @@ export const toolGroups = [
                 href: "/idle-pod-finder",
                 title: "Idle Pod Finder",
                 description: "Detect inactive pods to save resources.",
+                dependency: "oc",
             },
             {
                 href: "/oracle-object-validator",
@@ -96,16 +99,19 @@ export const toolGroups = [
                 href: "/pvc-analyzer",
                 title: "PVC Analyzer",
                 description: "Find zombie PVCs, inspect contents, and analyze usage.",
+                dependency: "oc",
             },
             {
                 href: "/pvc-browser",
                 title: "PVC Browser",
                 description: "Inspect Kubernetes Persistent Volume Claims.",
+                dependency: "oc",
             },
             {
                 href: "/pvc-migrator",
                 title: "PVC Migrator (Beta)",
                 description: "Safely migrate PVCs to new storage classes wizard.",
+                dependency: "oc",
             },
             {
                 href: "/openshift-resource-converter",

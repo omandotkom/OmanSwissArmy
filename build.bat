@@ -9,6 +9,23 @@ echo.
 echo Cleaning up previous builds (optional)...
 REM rd /s /q .next
 
+echo Checking dependencies...
+if exist dependencies_installed.flag (
+    echo Dependencies already installed. Skipping 'npm install'...
+) else (
+    if exist node_modules (
+        echo node_modules folder found. Skipping 'npm install'...
+    ) else (
+        echo Installing dependencies...
+        call npm install
+        if %ERRORLEVEL% NEQ 0 (
+            echo Failed to install dependencies.
+            pause
+            exit /b %ERRORLEVEL%
+        )
+    )
+)
+
 echo Running build process...
 call npm run build
 
@@ -36,6 +53,9 @@ xcopy /E /I /Y bin .next\standalone\bin >nul
 
 echo Copying '.next/static' folder...
 xcopy /E /I /Y .next\static .next\standalone\.next\static >nul
+
+echo Copying launcher script...
+copy /Y scripts\start_standalone.bat .next\standalone\start.bat >nul
 
 
 echo.

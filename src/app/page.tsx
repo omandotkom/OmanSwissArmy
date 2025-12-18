@@ -2,13 +2,27 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Search, Sparkles, BrainCircuit, Loader2 } from "lucide-react";
+import { Search, Sparkles, BrainCircuit, Loader2, AlertTriangle } from "lucide-react";
 import { toolGroups } from "@/data/tools";
 import { useAiSearch } from "@/hooks/useAiSearch";
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAiMode, setIsAiMode] = useState(false);
+  const [dependencies, setDependencies] = useState<{ oc: boolean; ai: boolean }>({ oc: true, ai: true });
+
+  useEffect(() => {
+    // Check system dependencies on load
+    fetch('/api/system/dependencies')
+      .then(res => res.json())
+      .then(data => {
+        setDependencies(data);
+        if (!data.ai && isAiMode) {
+          setIsAiMode(false);
+        }
+      })
+      .catch(err => console.error("Failed to check dependencies:", err));
+  }, []);
 
   // AI Search Hook
   const {
@@ -34,6 +48,7 @@ export default function Home() {
     href: string;
     title: string;
     description: string;
+    dependency?: string;
   };
 
   type ToolGroup = {
@@ -110,10 +125,14 @@ export default function Home() {
             {/* AI Toggle & Status */}
             <div className="flex items-center justify-center gap-4">
               <button
-                onClick={() => setIsAiMode(!isAiMode)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border ${isAiMode
-                  ? "bg-indigo-900/30 border-indigo-500/50 text-indigo-300"
-                  : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                onClick={() => !dependencies.ai ? null : setIsAiMode(!isAiMode)}
+                disabled={!dependencies.ai}
+                title={!dependencies.ai ? "AI Model libraries are not available" : ""}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border ${!dependencies.ai
+                  ? "bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed opacity-50"
+                  : isAiMode
+                    ? "bg-indigo-900/30 border-indigo-500/50 text-indigo-300"
+                    : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:bg-zinc-800"
                   }`}
               >
                 <BrainCircuit className="h-3.5 w-3.5" />
@@ -149,30 +168,63 @@ export default function Home() {
                 <span className="ml-4 h-px flex-1 bg-zinc-800"></span>
               </h2>
               <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {group.items.map((tool) => (
-                  <Link key={tool.href} href={tool.href} className="block w-full">
-                    <button className={`group relative flex h-full w-full flex-col items-start justify-start overflow-hidden rounded-xl border p-6 text-left shadow-sm transition-all duration-300 hover:shadow-md active:scale-[0.98] ${isAiMode
-                      ? "bg-zinc-900/50 border-indigo-900/30 hover:bg-indigo-900/20 hover:border-indigo-500/50"
-                      : "bg-zinc-900 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700"
-                      }`}>
-                      <span className={`mb-1 text-lg font-medium transition-colors duration-300 ${isAiMode ? "text-indigo-200 group-hover:text-white" : "text-zinc-300 group-hover:text-white"}`}>
-                        {tool.title}
-                      </span>
-                      <div className="max-h-0 opacity-0 transition-all duration-300 ease-out group-hover:max-h-20 group-hover:opacity-100 group-hover:mt-2">
-                        <p className="text-sm text-zinc-400 leading-relaxed">
-                          {tool.description}
+                {group.items.map((tool) => {
+                  const isOcMissing = tool.dependency === 'oc' && !dependencies.oc;
+                  const isAiMissing = tool.dependency === 'ai' && !dependencies.ai;
+                  const isDisabled = isOcMissing || isAiMissing;
+                  const missingLabel = isOcMissing ? "OC Binary Missing" : isAiMissing ? "AI Model Missing" : "";
+
+                  const CardContent = (
+                    <button
+                      disabled={isDisabled}
+                      className={`group relative flex h-full w-full flex-col items-start justify-start overflow-hidden rounded-xl border p-6 text-left shadow-sm transition-all duration-300 ${isDisabled
+                        ? "bg-zinc-900/30 border-zinc-800 cursor-not-allowed opacity-60"
+                        : isAiMode
+                          ? "bg-zinc-900/50 border-indigo-900/30 hover:bg-indigo-900/20 hover:border-indigo-500/50 hover:shadow-md active:scale-[0.98]"
+                          : "bg-zinc-900 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 hover:shadow-md active:scale-[0.98]"
+                        }`}
+                    >
+                      <div className="flex w-full justify-between items-start mb-1">
+                        <span className={`text-lg font-medium transition-colors duration-300 ${isDisabled
+                          ? "text-zinc-500"
+                          : isAiMode ? "text-indigo-200 group-hover:text-white" : "text-zinc-300 group-hover:text-white"
+                          }`}>
+                          {tool.title}
+                        </span>
+                        {isDisabled && (
+                          <AlertTriangle className="h-5 w-5 text-amber-500/80" />
+                        )}
+                      </div>
+
+                      <div className={`max-h-0 opacity-0 transition-all duration-300 ease-out ${isDisabled ? "max-h-20 opacity-100 mt-2" : "group-hover:max-h-20 group-hover:opacity-100 group-hover:mt-2"}`}>
+                        <p className={`text-sm leading-relaxed ${isDisabled ? "text-amber-500/80" : "text-zinc-400"}`}>
+                          {isDisabled ? `Unavailable: ${missingLabel}` : tool.description}
                         </p>
                       </div>
 
                       {/* Always show description in AI mode for better context visibility */}
-                      {isAiMode && (
+                      {isAiMode && !isDisabled && (
                         <p className="mt-2 text-sm text-zinc-500 leading-relaxed group-hover:hidden">
                           {tool.description}
                         </p>
                       )}
                     </button>
-                  </Link>
-                ))}
+                  );
+
+                  if (isDisabled) {
+                    return (
+                      <div key={tool.href} className="block w-full" title={`Required library (${tool.dependency}) is missing`}>
+                        {CardContent}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Link key={tool.href} href={tool.href} className="block w-full">
+                      {CardContent}
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           ))

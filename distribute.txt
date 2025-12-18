@@ -1,0 +1,58 @@
+========================================================================
+PANDUAN DISTRIBUSI OMAN SWISS ARMY TOOL (MODE PORTABLE)
+========================================================================
+
+Panduan ini menjelaskan cara memaketkan aplikasi agar siap digunakan oleh user
+tanpa perlu internet dan tanpa perlu menjalankan 'npm install'.
+
+------------------------------------------------------------------------
+LANGKAH UNTUK DEVELOPER (ANDA)
+------------------------------------------------------------------------
+
+1. Build Aplikasi
+   Jalankan file `build.bat` di root project Anda.
+   Tunggu hingga muncul pesan "BUILD SUCCESSFUL".
+
+2. Siapkan Paket Distribusi
+   Setelah build sukses, folder distribusi siap di:
+   Lokasi: `.next\standalone`
+
+   Folder ini sudah berisi:
+   - Aplikasi siap pakai (server.js)
+   - Folder `public` (Model AI & Assets)
+   - Folder `bin` (OC Executable)
+   - Folder `.next/static` (Style & Scripts)
+   - File `start.bat` (Launcher khusus user)
+
+3. Distribusi (Zip)
+   - Masuk ke folder `.next`
+   - Klik kanan folder `standalone`, lalu pilih "Compress to ZIP file".
+   - Ubah nama file ZIP menjadi `OmanSwissArmyTool_v1.0.zip` (opsional).
+   - Kirim file ZIP tersebut ke user.
+
+------------------------------------------------------------------------
+PANDUAN UNTUK END-USER (PENGGUNA)
+------------------------------------------------------------------------
+
+1. Ekstrak File
+   Download dan ekstrak file ZIP yang diterima ke komputer/laptop.
+
+2. Install Syarat (Cuma Sekali)
+   Pastikan komputer sudah terinstall Node.js.
+   (Download di: https://nodejs.org/)
+
+3. Jalankan Aplikasi
+   Buka folder hasil ekstrak, cari file `start.bat`.
+   Double klik `start.bat`.
+
+   Aplikasi akan otomatis terbuka di browser.
+   TIDAK PERLU internet.
+   TIDAK PERLU npm install.
+   TIDAK PERLU config apa-apa.
+
+========================================================================
+CATATAN TEKNIS
+========================================================================
+- Script `build.bat` sudah dimodifikasi untuk otomatis meng-copy file
+  `scripts/start_standalone.bat` menjadi `start.bat` di folder distribusi.
+- Aplikasi berjalan di Port 1998 (http://localhost:1998).
