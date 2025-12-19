@@ -318,7 +318,7 @@ export default function Home() {
               </div>
 
               <div className="p-4 border-t border-zinc-800 text-xs text-zinc-600 text-center">
-                v0.1.0-beta
+                v{process.env.NEXT_PUBLIC_APP_VERSION}-beta
               </div>
             </div>
 
@@ -363,7 +363,7 @@ export default function Home() {
                       Oman Swiss Army Tool
                     </h1>
                     <div className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-mono text-zinc-500 mb-6">
-                      v0.1.0-beta
+                      v{process.env.NEXT_PUBLIC_APP_VERSION}-beta
                     </div>
                     <p className="text-zinc-400 max-w-md leading-relaxed mb-12">
                       A comprehensive suite of developer utilities designed to streamline your daily workflow, from database management to code utilities.
