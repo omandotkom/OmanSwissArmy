@@ -376,9 +376,10 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                                             clean = sortTableContent(clean);
                                         }
 
-                                        // 4. For SEQUENCES: Ignore START WITH value (differs between envs)
+                                        // 4. For SEQUENCES: Enhanced Normalization for comparison
                                         if (type === 'SEQUENCE') {
-                                            clean = clean.replace(/START WITH \d+/gi, "START WITH (IGNORED)");
+                                            // User Request: Only compare Name (Existence). Ignore all properties.
+                                            return "SEQUENCE_PROPERTIES_IGNORED";
                                         }
 
                                         return clean;

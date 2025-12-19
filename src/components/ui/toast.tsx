@@ -28,13 +28,13 @@ export const useToast = () => {
 
 export function ToastContainer({ toasts, removeToast }: { toasts: Toast[], removeToast: (id: string) => void }) {
     return (
-        <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2">
             {toasts.map((toast) => (
                 <div
                     key={toast.id}
                     className={`flex items-center justify-between gap-4 min-w-[300px] rounded-lg border px-4 py-3 shadow-lg transition-all animate-in slide-in-from-right fade-in duration-300 ${toast.type === "success"
-                            ? "bg-zinc-900 border-green-500/50 text-green-400"
-                            : "bg-zinc-900 border-red-500/50 text-red-400"
+                        ? "bg-zinc-900 border-green-500/50 text-green-400"
+                        : "bg-zinc-900 border-red-500/50 text-red-400"
                         }`}
                 >
                     <span className="text-sm font-medium">{toast.message}</span>

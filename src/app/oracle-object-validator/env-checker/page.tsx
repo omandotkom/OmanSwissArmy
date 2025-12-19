@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Upload, FileSpreadsheet, Database, Settings2, CheckCircle2, Play, X, Download, FileDiff } from "lucide-react";
+import { ArrowLeft, Upload, FileSpreadsheet, Database, Settings2, CheckCircle2, Play, X, Download, FileDiff, ListChecks } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DiffEditor } from "@monaco-editor/react";
 import ConnectionManager from "@/components/ConnectionManager";
@@ -37,10 +37,27 @@ export default function ObjectDBEnvChecker() {
     const [isComparing, setIsComparing] = useState(false);
     const [comparisonResults, setComparisonResults] = useState<any[] | null>(null);
     const [showResults, setShowResults] = useState(false);
+    const [showIssuedOnly, setShowIssuedOnly] = useState(false);
 
     // Owner & Connection Logic
     const [detectedOwners, setDetectedOwners] = useState<string[]>([]);
     const [ownerMappings, setOwnerMappings] = useState<OwnerMapping>({});
+    const [env1Keyword, setEnv1Keyword] = useState("");
+    const [env2Keyword, setEnv2Keyword] = useState("");
+    const [isAutoMapping, setIsAutoMapping] = useState(false);
+    const workerRef = useRef<Worker | null>(null);
+
+    useEffect(() => {
+        // Initialize Worker
+        workerRef.current = new Worker(new URL('./auto-mapping.worker.ts', import.meta.url));
+        workerRef.current.onmessage = (event: MessageEvent<OwnerMapping>) => {
+            setOwnerMappings(event.data);
+            setIsAutoMapping(false);
+        };
+        return () => {
+            workerRef.current?.terminate();
+        };
+    }, []);
 
     // Auto-mapping State
     const [availableConnections, setAvailableConnections] = useState<any[]>([]);
@@ -77,7 +94,7 @@ export default function ObjectDBEnvChecker() {
         load();
     }, []);
 
-    const findBestMatches = (owner: string, connections: OracleConnection[]) => {
+    const findBestMatches = (owner: string, connections: OracleConnection[], preferredKeyword: string = "") => {
         const candidates = connections.filter(c => {
             const cName = c.name.toUpperCase();
             const cUser = c.username.toUpperCase();
@@ -96,18 +113,47 @@ export default function ObjectDBEnvChecker() {
         // Sort by quality of match
         return candidates.sort((a, b) => {
             const oName = owner.toUpperCase();
+            const keyword = preferredKeyword.toUpperCase().trim();
 
-            const scoreA = (a.username.toUpperCase() === oName ? 100 : 0) +
+            let scoreA = (a.username.toUpperCase() === oName ? 100 : 0) +
                 (a.username.toUpperCase().includes(oName) ? 50 : 0) +
                 (a.name.toUpperCase().includes(oName) ? 20 : 0);
 
-            const scoreB = (b.username.toUpperCase() === oName ? 100 : 0) +
+            let scoreB = (b.username.toUpperCase() === oName ? 100 : 0) +
                 (b.username.toUpperCase().includes(oName) ? 50 : 0) +
                 (b.name.toUpperCase().includes(oName) ? 20 : 0);
+
+            // Boost score if keyword matches
+            if (keyword) {
+                if (a.name.toUpperCase().includes(keyword) || a.host.toUpperCase().includes(keyword)) {
+                    scoreA += 500;
+                }
+                if (b.name.toUpperCase().includes(keyword) || b.host.toUpperCase().includes(keyword)) {
+                    scoreB += 500;
+                }
+            }
 
             return scoreB - scoreA;
         });
     };
+
+    const applyAutoMapping = (ownersList: string[]) => {
+        if (!workerRef.current) return;
+        setIsAutoMapping(true);
+        workerRef.current.postMessage({
+            owners: ownersList,
+            connections: availableConnections,
+            env1Keyword,
+            env2Keyword
+        });
+    };
+
+    // Re-run auto-mapping when keywords change or owners change
+    useEffect(() => {
+        if (detectedOwners.length > 0 && availableConnections.length > 0) {
+            applyAutoMapping(detectedOwners);
+        }
+    }, [env1Keyword, env2Keyword, detectedOwners, availableConnections]);
 
     // ... (existing code)
 
@@ -181,9 +227,7 @@ export default function ObjectDBEnvChecker() {
                 setConnectionCheckStatus(null); // Close checks
             }
 
-            const allItems: any[] = [];
-
-            // Extract items from all sheets
+            const uniqueItemsMap = new Map<string, any>();
 
             // Extract items from all sheets
             sheets.forEach(sheet => {
@@ -194,9 +238,9 @@ export default function ObjectDBEnvChecker() {
 
                     // Normalize keys (handle case sensitivity if needed)
                     // Common variations: "Object Name", "OBJECT NAME", "Object Type", etc.
-                    const owner = row['OWNER'] || row['owner'] || row['Owner'];
-                    const name = row['OBJECT_NAME'] || row['object_name'] || row['Object Name'] || row['OBJECT NAME'] || row['NAME'] || row['name'] || row['Name'];
-                    let type = row['OBJECT_TYPE'] || row['object_type'] || row['Object Type'] || row['OBJECT TYPE'] || row['TYPE'] || row['type'] || row['Type'];
+                    const owner = String(row['OWNER'] || row['owner'] || row['Owner'] || '').trim();
+                    const name = String(row['OBJECT_NAME'] || row['object_name'] || row['Object Name'] || row['OBJECT NAME'] || row['NAME'] || row['name'] || row['Name'] || '').trim();
+                    let type = String(row['OBJECT_TYPE'] || row['object_type'] || row['Object Type'] || row['OBJECT TYPE'] || row['TYPE'] || row['type'] || row['Type'] || '').trim();
 
                     // Fallback to Sheet Name if Type is missing
                     if (!type) {
@@ -216,10 +260,16 @@ export default function ObjectDBEnvChecker() {
                     }
 
                     if (owner && name && type) {
-                        allItems.push({ owner, name, type });
+                        // Create a unique key for deduplication
+                        const uniqueKey = `${owner.toUpperCase()}|${name.toUpperCase()}|${type.toUpperCase()}`;
+                        if (!uniqueItemsMap.has(uniqueKey)) {
+                            uniqueItemsMap.set(uniqueKey, { owner, name, type });
+                        }
                     }
                 });
             });
+
+            const allItems = Array.from(uniqueItemsMap.values());
 
             console.log("Extracted items for validation:", allItems);
 
@@ -278,7 +328,7 @@ export default function ObjectDBEnvChecker() {
 
     const processValidationQueue = async (initialItems: any[]) => {
         const BATCH_SIZE = 5;
-        const MAX_CONCURRENCY = 10;
+        const MAX_CONCURRENCY = 20;
 
         // Group items by Owner for connection efficiency
         const itemsByOwner: Record<string, any[]> = {};
@@ -692,33 +742,13 @@ export default function ObjectDBEnvChecker() {
 
                 // Initialize Mapping
                 // Initialize Mapping
-                const ownersList = Array.from(ownersSet).sort();
-                const initialMapping: OwnerMapping = {};
-
-                ownersList.forEach(owner => {
-                    const matches = findBestMatches(owner, availableConnections);
-
-                    // Assign best matches if available
-                    // If we have at least 1 match, assign to Env1
-                    // If we have at least 2 distinct matches, assign to Env1 and Env2 (or just pick top 2)
-                    let env1 = null;
-                    let env2 = null;
-
-                    if (matches.length > 0) {
-                        env1 = matches[0];
-                        if (matches.length > 1) {
-                            env2 = matches[1];
-                        }
-                    }
-
-                    initialMapping[owner] = { env1, env2 };
-                });
-
                 setSheets(loadedSheets);
                 setSelectedRows(initialSelections);
-                setDetectedOwners(ownersList);
-                setOwnerMappings(initialMapping);
+                setDetectedOwners(Array.from(ownersSet).sort());
+                // ownerMappings will be set by useEffect
                 setActiveTab(0);
+
+
 
             } catch (err) {
                 console.error("Error parsing excel", err);
@@ -908,6 +938,32 @@ export default function ObjectDBEnvChecker() {
                             </button>
                         </div>
 
+                        {/* Keyword-based Preference Control */}
+                        <div className="flex gap-4 mb-6 bg-zinc-950/50 p-4 rounded-lg border border-zinc-800/50">
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Env 1 Preference (Keyword)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. PROD, MASTER"
+                                    value={env1Keyword}
+                                    onChange={(e) => setEnv1Keyword(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <p className="text-[10px] text-zinc-600 mt-1">Boosts connections containing this text.</p>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Env 2 Preference (Keyword)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. DEV, SIT, QC"
+                                    value={env2Keyword}
+                                    onChange={(e) => setEnv2Keyword(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <p className="text-[10px] text-zinc-600 mt-1">Boosts connections containing this text.</p>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-12 gap-4 mb-2 px-2 text-xs font-bold text-zinc-500 uppercase tracking-wider">
                             <div className="col-span-2">Object Owner</div>
                             <div className="col-span-5">Environment 1 (Reference)</div>
@@ -923,40 +979,48 @@ export default function ObjectDBEnvChecker() {
 
                                     {/* Env 1 Selector */}
                                     <div className="col-span-5">
-                                        <button
-                                            onClick={() => openConnManager(owner, "env1")}
-                                            className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.env1
-                                                ? "bg-zinc-900 border-zinc-700 text-zinc-200"
-                                                : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                                                }`}
-                                        >
-                                            <div className="truncate flex flex-col">
-                                                <span className="font-medium">{ownerMappings[owner]?.env1?.name || "Select Environment 1..."}</span>
-                                                {ownerMappings[owner]?.env1 && (
-                                                    <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.env1?.username}@{ownerMappings[owner]?.env1?.host}</span>
-                                                )}
-                                            </div>
-                                            <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
-                                        </button>
+                                        {isAutoMapping ? (
+                                            <div className="w-full h-10 bg-zinc-800/50 rounded-md animate-pulse border border-zinc-800" />
+                                        ) : (
+                                            <button
+                                                onClick={() => openConnManager(owner, "env1")}
+                                                className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.env1
+                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                    }`}
+                                            >
+                                                <div className="truncate flex flex-col">
+                                                    <span className="font-medium">{ownerMappings[owner]?.env1?.name || "Select Environment 1..."}</span>
+                                                    {ownerMappings[owner]?.env1 && (
+                                                        <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.env1?.username}@{ownerMappings[owner]?.env1?.host}</span>
+                                                    )}
+                                                </div>
+                                                <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Env 2 Selector */}
                                     <div className="col-span-5">
-                                        <button
-                                            onClick={() => openConnManager(owner, "env2")}
-                                            className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.env2
-                                                ? "bg-zinc-900 border-zinc-700 text-zinc-200"
-                                                : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                                                }`}
-                                        >
-                                            <div className="truncate flex flex-col">
-                                                <span className="font-medium">{ownerMappings[owner]?.env2?.name || "Select Environment 2..."}</span>
-                                                {ownerMappings[owner]?.env2 && (
-                                                    <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.env2?.username}@{ownerMappings[owner]?.env2?.host}</span>
-                                                )}
-                                            </div>
-                                            <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
-                                        </button>
+                                        {isAutoMapping ? (
+                                            <div className="w-full h-10 bg-zinc-800/50 rounded-md animate-pulse border border-zinc-800" />
+                                        ) : (
+                                            <button
+                                                onClick={() => openConnManager(owner, "env2")}
+                                                className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.env2
+                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                    }`}
+                                            >
+                                                <div className="truncate flex flex-col">
+                                                    <span className="font-medium">{ownerMappings[owner]?.env2?.name || "Select Environment 2..."}</span>
+                                                    {ownerMappings[owner]?.env2 && (
+                                                        <span className="text-[10px] text-zinc-500">{ownerMappings[owner]?.env2?.username}@{ownerMappings[owner]?.env2?.host}</span>
+                                                    )}
+                                                </div>
+                                                <Settings2 className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -1099,6 +1163,15 @@ export default function ObjectDBEnvChecker() {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <button
+                                            onClick={() => setShowIssuedOnly(!showIssuedOnly)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${showIssuedOnly
+                                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500/30'
+                                                : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                                                }`}
+                                        >
+                                            <ListChecks className="w-4 h-4" /> Issued Only
+                                        </button>
+                                        <button
                                             onClick={handleExportExcel}
                                             className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 hover:text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
                                         >
@@ -1141,33 +1214,35 @@ export default function ObjectDBEnvChecker() {
                                                 </td>
                                             </tr>
                                         ) : (
-                                            comparisonResults.map((res, idx) => (
-                                                <tr key={idx} className="hover:bg-zinc-800/50 transition-colors">
-                                                    <td className="p-4 text-yellow-500 font-mono font-medium">{res?.item?.owner || '-'}</td>
-                                                    <td className="p-4 font-mono font-bold text-white">{res?.item?.name || '-'}</td>
-                                                    <td className="p-4 text-zinc-500 font-medium">{res?.item?.type || '-'}</td>
-                                                    <td className="p-4">
-                                                        <span
-                                                            onClick={(e) => {
-                                                                if (res?.status === 'DIFF') {
-                                                                    e.stopPropagation();
-                                                                    handleViewDiff(res);
-                                                                }
-                                                            }}
-                                                            className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${res?.status === 'DIFF' ? 'cursor-pointer hover:bg-orange-500/20 active:scale-95' : 'cursor-default'
-                                                                } ${res?.status === 'MATCH' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                                    res?.status === 'DIFF' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                                                        res?.status === 'WAITING' ? 'bg-orange-900/20 text-orange-200 border-orange-500/30' :
-                                                                            res?.status === 'CHECKING' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30 animate-pulse' :
-                                                                                res?.status?.includes('MISSING') ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                                                    'bg-zinc-800 text-zinc-400 border-zinc-700'
-                                                                }`}>
-                                                            {res?.status || 'UNKNOWN'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-xs font-mono text-zinc-500 truncate max-w-xs">{res?.error || (res?.status === 'DIFF' ? 'Content mismatch found' : '')}</td>
-                                                </tr>
-                                            ))
+                                            comparisonResults
+                                                .filter(res => !showIssuedOnly || res.status !== 'MATCH')
+                                                .map((res, idx) => (
+                                                    <tr key={idx} className="hover:bg-zinc-800/50 transition-colors">
+                                                        <td className="p-4 text-yellow-500 font-mono font-medium">{res?.item?.owner || '-'}</td>
+                                                        <td className="p-4 font-mono font-bold text-white">{res?.item?.name || '-'}</td>
+                                                        <td className="p-4 text-zinc-500 font-medium">{res?.item?.type || '-'}</td>
+                                                        <td className="p-4">
+                                                            <span
+                                                                onClick={(e) => {
+                                                                    if (res?.status === 'DIFF') {
+                                                                        e.stopPropagation();
+                                                                        handleViewDiff(res);
+                                                                    }
+                                                                }}
+                                                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${res?.status === 'DIFF' ? 'cursor-pointer hover:bg-orange-500/20 active:scale-95' : 'cursor-default'
+                                                                    } ${res?.status === 'MATCH' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                                        res?.status === 'DIFF' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                                                            res?.status === 'WAITING' ? 'bg-orange-900/20 text-orange-200 border-orange-500/30' :
+                                                                                res?.status === 'CHECKING' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30 animate-pulse' :
+                                                                                    res?.status?.includes('MISSING') ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                                                        'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                                                    }`}>
+                                                                {res?.status || 'UNKNOWN'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 text-xs font-mono text-zinc-500 truncate max-w-xs">{res?.error || (res?.status === 'DIFF' ? 'Content mismatch found' : '')}</td>
+                                                    </tr>
+                                                ))
                                         )}
                                     </tbody>
                                 </table>
@@ -1206,7 +1281,7 @@ export default function ObjectDBEnvChecker() {
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
                                 {connectionCheckStatus.map((chk, idx) => (
                                     <div key={idx} className="flex items-center justify-between p-3 bg-zinc-950 rounded-lg border border-zinc-800">
                                         <div className="flex items-center gap-3">

@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Database, FileSpreadsheet, Upload, X, Eye, ListChecks, Play, Code2 } from "lucide-react";
+import { ArrowLeft, Loader2, Database, FileSpreadsheet, Upload, X, Eye, ListChecks, Play, Code2, FileText } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DiffEditor } from "@monaco-editor/react";
+import { useToast, ToastContainer } from "@/components/ui/toast";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
 
@@ -18,6 +19,9 @@ interface OwnerMapValue {
 }
 
 export default function ThreeWayComparisonPage() {
+    const { toasts, addToast, removeToast } = useToast();
+    const reportUploadRef = useRef<HTMLInputElement>(null);
+    const [missingConnModal, setMissingConnModal] = useState<{ owner: string } | null>(null);
     const [excelFile, setExcelFile] = useState<File | null>(null);
     const [isParsingExcel, setIsParsingExcel] = useState(false);
     const [excelData, setExcelData] = useState<any[]>([]); // { owner, name, type }
@@ -58,6 +62,61 @@ export default function ThreeWayComparisonPage() {
         getAllConnections().then(setAvailableConnections);
     }, []);
 
+    // -------------------------------------------------------------------------
+    // Auto-Mapping Logic (Ported from Env Checker)
+    // -------------------------------------------------------------------------
+    const [env1Keyword, setEnv1Keyword] = useState("");
+    const [env2Keyword, setEnv2Keyword] = useState("");
+    const [isAutoMapping, setIsAutoMapping] = useState(false);
+    const workerRef = useRef<Worker | null>(null);
+
+    // Initialize Worker
+    useEffect(() => {
+        workerRef.current = new Worker(new URL('./auto-mapping.worker.ts', import.meta.url));
+        workerRef.current.onmessage = (event: MessageEvent<any>) => {
+            // Worker returns { owner: { env1, env2 } }
+            // We need to map env1 -> master, env2 -> slave
+            const rawMapping = event.data;
+            const mapped: Record<string, OwnerMapValue> = {};
+
+            Object.keys(rawMapping).forEach(owner => {
+                mapped[owner] = {
+                    master: rawMapping[owner].env1,
+                    slave: rawMapping[owner].env2
+                };
+            });
+
+            setOwnerMappings(mapped);
+            setIsAutoMapping(false);
+        };
+        return () => {
+            workerRef.current?.terminate();
+        };
+    }, []);
+
+    const applyAutoMapping = (ownersList: string[]) => {
+        if (!workerRef.current) return;
+        setIsAutoMapping(true);
+        workerRef.current.postMessage({
+            owners: ownersList,
+            connections: availableConnections,
+            env1Keyword, // Acts as Master Preference
+            env2Keyword  // Acts as Slave Preference
+        });
+    };
+
+    // Trigger Auto-Mapping when dependencies change
+    useEffect(() => {
+        const ownersList = Array.from(excelOwners);
+        if (ownersList.length > 0 && availableConnections.length > 0) {
+            applyAutoMapping(ownersList);
+        }
+    }, [env1Keyword, env2Keyword, excelOwners, availableConnections]);
+
+    // -------------------------------------------------------------------------
+    // End Auto-Mapping Logic
+    // -------------------------------------------------------------------------
+
     useEffect(() => {
         if (logContainerRef.current) {
             logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
@@ -92,9 +151,7 @@ export default function ThreeWayComparisonPage() {
         return () => clearInterval(interval);
     }, [jobStatus, jobId]);
 
-    const findBestMatches = (owner: string, conns: OracleConnection[]) => {
-        return conns.filter(c => c.username.toUpperCase() === owner || c.username.toUpperCase().includes(owner));
-    };
+
 
     const handleConnSelect = (conn: OracleConnection) => {
         if (selectingForOwner && selectingForType) {
@@ -169,28 +226,7 @@ export default function ThreeWayComparisonPage() {
                 setExcelData(parsedItems);
                 setExcelOwners(owners);
 
-                const newMapping: Record<string, OwnerMapValue> = {};
-                owners.forEach(owner => {
-                    const matches = findBestMatches(owner, availableConnections);
-                    let m: OracleConnection | null = null;
-                    let s: OracleConnection | null = null;
-
-                    if (matches.length >= 1) {
-                        const prod = matches.find(c => c.name.toUpperCase().includes('PROD') || c.name.toUpperCase().includes('MASTER'));
-                        const dev = matches.find(c => c.name.toUpperCase().includes('DEV') || c.name.toUpperCase().includes('UAT') || c.name.toUpperCase().includes('SLAVE') || c.name.toUpperCase().includes('NON'));
-
-                        if (prod) m = prod;
-                        if (dev) s = dev;
-
-                        if (!m && matches.length > 0) m = matches[0];
-                        if (!s && matches.length > 1) s = matches[1];
-
-                        if (m?.id === s?.id) s = null;
-                    }
-
-                    newMapping[owner] = { master: m, slave: s };
-                });
-                setOwnerMappings(newMapping);
+                setOwnerMappings({}); // Will be populated by Auto-Mapping Effect
 
             } catch (err) {
                 console.error("Excel parse error", err);
@@ -200,6 +236,70 @@ export default function ThreeWayComparisonPage() {
             }
         };
         reader.readAsBinaryString(uploadedFile);
+    };
+
+    const handleReportUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const content = evt.target?.result as string;
+            if (!content) return;
+
+            try {
+                const lines = content.split('\n').filter(l => l.trim().length > 0);
+                if (lines.length === 0) {
+                    addToast("File is empty", "error");
+                    return;
+                }
+
+                const headers = lines[0].split(',').map(h => h.trim());
+                const requiredHeaders = ['OWNER', 'OBJECT_NAME', 'OBJECT_TYPE', 'CONCLUSION', 'CONCLUSION_TYPE'];
+                const isValid = requiredHeaders.every(h => headers.includes(h));
+
+                if (!isValid) {
+                    addToast("Invalid Report File. Missing required columns.", "error");
+                    return;
+                }
+
+                // Parse rows
+                const rows = lines.slice(1).map(line => {
+                    const safeValues: string[] = [];
+                    let current = '';
+                    let inQuote = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') { inQuote = !inQuote; continue; }
+                        if (char === ',' && !inQuote) {
+                            safeValues.push(current); current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    safeValues.push(current);
+
+                    const obj: any = {};
+                    headers.forEach((h, i) => {
+                        obj[h] = safeValues[i]?.replace(/^"|"$/g, '');
+                    });
+                    return obj;
+                });
+
+                setPreviewData(rows);
+                setShowIssuedOnly(false);
+                setPreviewPage(1);
+                setViewModalOpen(true);
+                addToast("Report Loaded Successfully", "success");
+
+            } catch (err) {
+                console.error("Parse Error", err);
+                addToast("Failed to parse report file", "error");
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        e.target.value = '';
     };
 
     const startAnalysisJob = async () => {
@@ -337,7 +437,7 @@ export default function ThreeWayComparisonPage() {
 
         } catch (e) {
             console.error("Preview error", e);
-            alert("Failed to load preview");
+            addToast("Failed to load preview", "error");
         } finally {
             setIsLoadingPreview(false);
         }
@@ -350,13 +450,14 @@ export default function ThreeWayComparisonPage() {
         const type = row['OBJECT_TYPE'];
 
         if (!owner || !name || !type) {
-            alert("Invalid Object Identifiers");
+            addToast("Invalid Object Identifiers", "error");
             return;
         }
 
-        const mapping = ownerMappings[owner];
-        if (!mapping || !mapping.master || !mapping.slave) {
-            alert(`No complete connection mapping found for owner ${owner}`);
+        let currentMapping = ownerMappings[owner];
+
+        if (!currentMapping || !currentMapping.master || !currentMapping.slave) {
+            setMissingConnModal({ owner });
             return;
         }
 
@@ -369,8 +470,8 @@ export default function ThreeWayComparisonPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    master: mapping.master,
-                    slave: mapping.slave,
+                    master: currentMapping.master,
+                    slave: currentMapping.slave,
                     object: { owner, name, type }
                 })
             });
@@ -385,7 +486,7 @@ export default function ThreeWayComparisonPage() {
             });
 
         } catch (e: any) {
-            alert("Failed to fetch DDL: " + e.message);
+            addToast("Failed to fetch DDL: " + e.message, "error");
             setDiffContent(prev => ({ ...prev, master: 'Error fetching DDL', slave: 'Error fetching DDL', patch: 'Error fetching DDL' }));
         } finally {
             setIsLoadingDiff(false);
@@ -394,6 +495,7 @@ export default function ThreeWayComparisonPage() {
 
     return (
         <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
             <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-4">
@@ -409,6 +511,20 @@ export default function ThreeWayComparisonPage() {
                             Three Way Comparison (Large Data Support)
                         </h1>
                     </div>
+                    <button
+                        onClick={() => reportUploadRef.current?.click()}
+                        className="flex items-center gap-2 rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700"
+                    >
+                        <FileText className="h-4 w-4" />
+                        Upload Existing Report
+                    </button>
+                    <input
+                        type="file"
+                        ref={reportUploadRef}
+                        onChange={handleReportUpload}
+                        accept=".csv"
+                        className="hidden"
+                    />
                 </div>
             </header>
 
@@ -455,6 +571,32 @@ export default function ThreeWayComparisonPage() {
                             <Database className="text-blue-500" /> 2. Connection Mapping (Per Owner)
                         </h2>
 
+                        {/* Keyword Preferences */}
+                        {excelOwners.size > 0 && (
+                            <div className="flex gap-4 mb-4 bg-zinc-950 p-4 rounded-lg border border-zinc-800">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Master Preference (Keyword)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. PROD, MASTER"
+                                        value={env1Keyword}
+                                        onChange={(e) => setEnv1Keyword(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Slave Preference (Keyword)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. DEV, QC, SIT"
+                                        value={env2Keyword}
+                                        onChange={(e) => setEnv2Keyword(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {excelOwners.size === 0 ? (
                             <div className="flex-1 flex items-center justify-center text-zinc-500 italic border border-zinc-800/50 rounded-lg bg-zinc-950/30 p-8">
                                 Upload Excel to configure connection mappings.
@@ -474,20 +616,28 @@ export default function ThreeWayComparisonPage() {
                                             <tr key={owner} className="hover:bg-zinc-800/30">
                                                 <td className="p-3 font-mono text-emerald-400 font-bold">{owner}</td>
                                                 <td className="p-3">
-                                                    <button
-                                                        onClick={() => { setSelectingForOwner(owner); setSelectingForType('MASTER'); setIsConnManagerOpen(true); }}
-                                                        className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.master ? 'bg-blue-900/20 text-blue-300 border-blue-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
-                                                    >
-                                                        {ownerMappings[owner]?.master ? `${ownerMappings[owner].master!.name} (${ownerMappings[owner].master!.host})` : 'Select Master'}
-                                                    </button>
+                                                    {isAutoMapping ? (
+                                                        <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => { setSelectingForOwner(owner); setSelectingForType('MASTER'); setIsConnManagerOpen(true); }}
+                                                            className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.master ? 'bg-blue-900/20 text-blue-300 border-blue-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
+                                                        >
+                                                            {ownerMappings[owner]?.master ? `${ownerMappings[owner].master!.name} (${ownerMappings[owner].master!.host})` : 'Select Master'}
+                                                        </button>
+                                                    )}
                                                 </td>
                                                 <td className="p-3">
-                                                    <button
-                                                        onClick={() => { setSelectingForOwner(owner); setSelectingForType('SLAVE'); setIsConnManagerOpen(true); }}
-                                                        className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.slave ? 'bg-purple-900/20 text-purple-300 border-purple-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
-                                                    >
-                                                        {ownerMappings[owner]?.slave ? `${ownerMappings[owner].slave!.name} (${ownerMappings[owner].slave!.host})` : 'Select Slave'}
-                                                    </button>
+                                                    {isAutoMapping ? (
+                                                        <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => { setSelectingForOwner(owner); setSelectingForType('SLAVE'); setIsConnManagerOpen(true); }}
+                                                            className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.slave ? 'bg-purple-900/20 text-purple-300 border-purple-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
+                                                        >
+                                                            {ownerMappings[owner]?.slave ? `${ownerMappings[owner].slave!.name} (${ownerMappings[owner].slave!.host})` : 'Select Slave'}
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -655,9 +805,110 @@ export default function ThreeWayComparisonPage() {
 
             </main>
 
+            {/* Missing Connection Setup Modal */}
+            {missingConnModal && (
+                <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
+                    <div className="w-full max-w-md bg-zinc-950 rounded-xl border border-zinc-800 shadow-2xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <Database className="text-amber-500" /> Required Connectons
+                        </h3>
+                        <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+                            To compare objects for owner <span className="text-emerald-400 font-mono font-bold bg-emerald-950/30 px-1 rounded">{missingConnModal.owner}</span>,
+                            you need to configure both Master and Slave connections.
+                        </p>
+
+                        <div className="space-y-4">
+                            {/* Master */}
+                            <div className={`flex items-center justify-between p-3 rounded-lg border transition-all ${ownerMappings[missingConnModal.owner]?.master
+                                ? 'border-zinc-800 bg-zinc-900/50'
+                                : 'border-amber-500/30 bg-amber-500/10'
+                                }`}>
+                                <div>
+                                    <div className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                                        Master (Prod)
+                                        {ownerMappings[missingConnModal.owner]?.master && <span className="text-xs text-emerald-500">✓ Ready</span>}
+                                    </div>
+                                    <div className="text-xs text-zinc-500 mt-1">
+                                        {ownerMappings[missingConnModal.owner]?.master?.name || "Not Selected"}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setSelectingForOwner(missingConnModal.owner);
+                                        setSelectingForType('MASTER');
+                                        setIsConnManagerOpen(true);
+                                    }}
+                                    className={`text-xs px-3 py-1.5 rounded-md border font-medium transition-colors ${ownerMappings[missingConnModal.owner]?.master
+                                        ? 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                                        : 'bg-amber-500 text-black border-amber-600 hover:bg-amber-400 shadow-lg shadow-amber-900/20'
+                                        }`}
+                                >
+                                    {ownerMappings[missingConnModal.owner]?.master ? 'Change' : 'Select Master'}
+                                </button>
+                            </div>
+
+                            {/* Slave */}
+                            <div className={`flex items-center justify-between p-3 rounded-lg border transition-all ${ownerMappings[missingConnModal.owner]?.slave
+                                ? 'border-zinc-800 bg-zinc-900/50'
+                                : 'border-amber-500/30 bg-amber-500/10'
+                                }`}>
+                                <div>
+                                    <div className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                                        Slave (Dev)
+                                        {ownerMappings[missingConnModal.owner]?.slave && <span className="text-xs text-emerald-500">✓ Ready</span>}
+                                    </div>
+                                    <div className="text-xs text-zinc-500 mt-1">
+                                        {ownerMappings[missingConnModal.owner]?.slave?.name || "Not Selected"}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setSelectingForOwner(missingConnModal.owner);
+                                        setSelectingForType('SLAVE');
+                                        setIsConnManagerOpen(true);
+                                    }}
+                                    className={`text-xs px-3 py-1.5 rounded-md border font-medium transition-colors ${ownerMappings[missingConnModal.owner]?.slave
+                                        ? 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                                        : 'bg-amber-500 text-black border-amber-600 hover:bg-amber-400 shadow-lg shadow-amber-900/20'
+                                        }`}
+                                >
+                                    {ownerMappings[missingConnModal.owner]?.slave ? 'Change' : 'Select Slave'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-zinc-800">
+                            <button
+                                onClick={() => setMissingConnModal(null)}
+                                className="px-4 py-2 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const m = ownerMappings[missingConnModal.owner];
+                                    if (m?.master && m?.slave) {
+                                        setMissingConnModal(null);
+                                        addToast("Configuration saved. You can now view the diff.", "success");
+                                    } else {
+                                        addToast("Please select both Master and Slave connections.", "error");
+                                    }
+                                }}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${ownerMappings[missingConnModal.owner]?.master && ownerMappings[missingConnModal.owner]?.slave
+                                    ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/20'
+                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                    }`}
+                            >
+                                Done & Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Connection Manager Modal */}
             {isConnManagerOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="w-full max-w-2xl rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl">
                         <div className="flex items-center justify-between border-b border-zinc-800 p-4">
                             <h3 className="text-lg font-semibold text-white">Select Connection for {selectingForOwner} ({selectingForType})</h3>
