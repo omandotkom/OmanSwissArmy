@@ -42,11 +42,13 @@ export default function ThreeWayComparisonPage() {
     const [previewData, setPreviewData] = useState<any[]>([]);
     const [previewPage, setPreviewPage] = useState(1);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+    const [showIssuedOnly, setShowIssuedOnly] = useState(false);
 
     // Diff Viewer State
     const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
     const [diffContent, setDiffContent] = useState<{ master: string, slave: string, patch: string, title: string }>({ master: '', slave: '', patch: '', title: '' });
     const [isLoadingDiff, setIsLoadingDiff] = useState(false);
+    const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
 
     const [jobLogs, setJobLogs] = useState<string[]>([]);
     const [totalProgress, setTotalProgress] = useState(0);
@@ -233,9 +235,51 @@ export default function ThreeWayComparisonPage() {
         }
     };
 
-    const downloadReport = () => {
+    const handleDownloadExcel = async () => {
         if (!jobId) return;
-        window.open(`/api/oracle/three-way-stream?jobId=${jobId}&download=true`, '_blank');
+        setIsGeneratingExcel(true);
+        try {
+            const response = await fetch(`/api/oracle/three-way-stream?jobId=${jobId}&download=true`);
+            const blob = await response.blob();
+            const text = await blob.text();
+
+            const workbook = XLSX.read(text, { type: "string" });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+
+            // Make it neat: Auto-calculate column widths
+            const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1:A1");
+            const colWidths: any[] = [];
+
+            // Simple heuristic scanning first 500 rows for speed + header
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                let maxLen = 10; // min width
+                // Check header
+                const cellAddr = XLSX.utils.encode_cell({ c: C, r: range.s.r });
+                const cell = worksheet[cellAddr];
+                if (cell && cell.v) maxLen = Math.max(maxLen, String(cell.v).length + 2);
+
+                // Check first 1000 rows content
+                for (let R = range.s.r + 1; R <= Math.min(range.e.r, 1000); ++R) {
+                    const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+                    const cellVal = worksheet[cellRef];
+                    if (cellVal && cellVal.v) {
+                        maxLen = Math.max(maxLen, String(cellVal.v).length + 1);
+                    }
+                }
+                colWidths.push({ wch: maxLen });
+            }
+            worksheet['!cols'] = colWidths;
+
+            // Write File
+            XLSX.writeFile(workbook, `Analysis_Report_${jobId}.xlsx`);
+
+        } catch (e) {
+            console.error("Excel generation error", e);
+            alert("Failed to generate Excel file.");
+        } finally {
+            setIsGeneratingExcel(false);
+        }
     };
 
     const fetchPreviewData = async () => {
@@ -243,6 +287,7 @@ export default function ThreeWayComparisonPage() {
         setViewModalOpen(true);
         setIsLoadingPreview(true);
         setPreviewData([]);
+        setShowIssuedOnly(false);
         setPreviewPage(1); // Reset to page 1
 
         try {
@@ -465,14 +510,22 @@ export default function ThreeWayComparisonPage() {
 
                         {/* Progress Bar & Logs */}
                         <div className="w-full max-w-2xl space-y-4 mb-6">
-                            {/* Progress Bar */}
+                            {/* Progress Bar (Activity Based) */}
                             <div className="w-full bg-zinc-800 rounded-full h-4 overflow-hidden relative border border-zinc-700">
                                 <div
-                                    className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-300 ease-out"
-                                    style={{ width: `${totalProgress}%` }}
+                                    className={`h-full bg-gradient-to-r from-transparent via-blue-500 to-transparent w-1/2 absolute top-0 bottom-0 ${jobStatus !== 'COMPLETED' ? 'animate-shimmer' : 'hidden'}`}
+                                    style={{
+                                        backgroundImage: 'linear-gradient(90deg, transparent, #3b82f6, transparent)'
+                                    }}
                                 />
+                                {jobStatus === 'COMPLETED' && (
+                                    <div className="h-full bg-emerald-600 w-full" />
+                                )}
                                 <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
-                                    {totalProgress}%
+                                    {jobStatus === 'COMPLETED'
+                                        ? `Successfully scan ${jobProgress?.processed?.toLocaleString() || 0} objects`
+                                        : `Scanning ${jobProgress?.processed?.toLocaleString() || 0} objects...`
+                                    }
                                 </div>
                             </div>
 
@@ -480,7 +533,7 @@ export default function ThreeWayComparisonPage() {
                             {jobProgress && (
                                 <div className="flex justify-between text-xs text-zinc-400">
                                     <span>Processed: <strong className="text-white">{jobProgress.processed.toLocaleString()}</strong></span>
-                                    <span>Issues: <strong className="text-orange-400">{(jobProgress.diffs + jobProgress.missing + jobProgress.new).toLocaleString()}</strong></span>
+                                    <span>Issues: <strong className="text-orange-400">{(jobProgress.diffs + jobProgress.missing + jobProgress.new + (jobProgress.ghosts || 0)).toLocaleString()}</strong></span>
                                 </div>
                             )}
 
@@ -505,7 +558,7 @@ export default function ThreeWayComparisonPage() {
 
                         {jobStatus === 'COMPLETED' && (
                             <div className="space-y-6">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                                     <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800">
                                         <div className="text-2xl font-bold text-white">{jobProgress?.processed?.toLocaleString()}</div>
                                         <div className="text-xs text-zinc-500 uppercase">Total Objects</div>
@@ -517,6 +570,10 @@ export default function ThreeWayComparisonPage() {
                                     <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800">
                                         <div className="text-2xl font-bold text-red-400">{jobProgress?.missing?.toLocaleString()}</div>
                                         <div className="text-xs text-zinc-500 uppercase">Source Missing</div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800">
+                                        <div className="text-2xl font-bold text-zinc-400">{jobProgress?.ghosts?.toLocaleString()}</div>
+                                        <div className="text-xs text-zinc-500 uppercase">Ghost Objects</div>
                                     </div>
                                     <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800">
                                         <div className="text-2xl font-bold text-blue-400">{jobProgress?.new?.toLocaleString()}</div>
@@ -541,10 +598,19 @@ export default function ThreeWayComparisonPage() {
                                     </button>
 
                                     <button
-                                        onClick={downloadReport}
-                                        className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-emerald-900/20 transition-all hover:scale-105"
+                                        onClick={handleDownloadExcel}
+                                        disabled={isGeneratingExcel}
+                                        className={`flex items-center justify-center gap-2 px-8 py-4 rounded-full font-bold shadow-lg transition-all ${isGeneratingExcel ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105 shadow-emerald-900/20'}`}
                                     >
-                                        <FileSpreadsheet className="w-5 h-5" /> Download Full Report (.csv)
+                                        {isGeneratingExcel ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" /> Mengonversi ke excel...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FileSpreadsheet className="w-5 h-5" /> Download Excel Report
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                                 <p className="text-xs text-zinc-500">
@@ -621,9 +687,31 @@ export default function ThreeWayComparisonPage() {
                                 </h3>
                                 <p className="text-xs text-zinc-500">Showing first 300 rows of analysis result.</p>
                             </div>
-                            <button onClick={() => setViewModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
-                                <X className="h-6 w-6" />
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowIssuedOnly(!showIssuedOnly);
+                                        setPreviewPage(1);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${showIssuedOnly
+                                        ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30'
+                                        : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                                        }`}
+                                >
+                                    {showIssuedOnly ? (
+                                        <>
+                                            <ListChecks className="w-4 h-4" /> Show All Objects
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ListChecks className="w-4 h-4" /> Show Issued Only
+                                        </>
+                                    )}
+                                </button>
+                                <button onClick={() => setViewModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                                    <X className="h-6 w-6" />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-auto p-0">
@@ -644,7 +732,13 @@ export default function ThreeWayComparisonPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-                                        {previewData.slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
+                                        {(showIssuedOnly
+                                            ? previewData.filter(row => {
+                                                const c = String(row['CONCLUSION'] || '');
+                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                            })
+                                            : previewData
+                                        ).slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
                                             <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
                                                 {Object.entries(row).map(([key, val]: [string, any], cIdx) => {
                                                     const isConclusion = key === 'CONCLUSION';
@@ -686,11 +780,37 @@ export default function ThreeWayComparisonPage() {
                                     Previous
                                 </button>
                                 <span className="text-sm text-zinc-400">
-                                    Page <span className="text-white font-bold">{previewPage}</span> of <span className="text-white font-bold">{Math.ceil((previewData.length || 1) / 200)}</span>
+                                    Page <span className="text-white font-bold">{previewPage}</span> of <span className="text-white font-bold">{
+                                        Math.ceil(
+                                            (showIssuedOnly
+                                                ? previewData.filter(row => {
+                                                    const c = String(row['CONCLUSION'] || '');
+                                                    return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                                }).length
+                                                : previewData.length
+                                            ) / 200
+                                        ) || 1
+                                    }</span>
                                 </span>
                                 <button
-                                    onClick={() => setPreviewPage(p => Math.min(Math.ceil(previewData.length / 200), p + 1))}
-                                    disabled={previewPage >= Math.ceil(previewData.length / 200)}
+                                    onClick={() => setPreviewPage(p => Math.min(Math.ceil(
+                                        (showIssuedOnly
+                                            ? previewData.filter(row => {
+                                                const c = String(row['CONCLUSION'] || '');
+                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                            }).length
+                                            : previewData.length
+                                        ) / 200
+                                    ), p + 1))}
+                                    disabled={previewPage >= Math.ceil(
+                                        (showIssuedOnly
+                                            ? previewData.filter(row => {
+                                                const c = String(row['CONCLUSION'] || '');
+                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                            }).length
+                                            : previewData.length
+                                        ) / 200
+                                    )}
                                     className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors"
                                 >
                                     Next
@@ -698,7 +818,15 @@ export default function ThreeWayComparisonPage() {
                             </div>
                             <div className="flex items-center gap-4">
                                 <span className="text-xs text-zinc-500 hidden md:inline">
-                                    Total {previewData.length.toLocaleString()} rows loaded.
+                                    Total {
+                                        (showIssuedOnly
+                                            ? previewData.filter(row => {
+                                                const c = String(row['CONCLUSION'] || '');
+                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                            }).length
+                                            : previewData.length
+                                        ).toLocaleString()
+                                    } rows loaded.
                                 </span>
                                 <button onClick={() => setViewModalOpen(false)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white text-sm font-medium">
                                     Close Preview

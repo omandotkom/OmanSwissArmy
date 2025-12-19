@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
             progress: 0,
             total: excelData?.length || 0,
             logs: [],
-            summary: { processed: 0, diffs: 0, missing: 0, new: 0, debug: { masterRows: 0, slaveRows: 0, excelRows: 0 } },
+            summary: { processed: 0, diffs: 0, missing: 0, new: 0, ghosts: 0, debug: { masterRows: 0, slaveRows: 0, excelRows: 0 } },
             error: null,
             resultFile: path.join(jobDir, `result.csv`)
         };
@@ -174,7 +174,8 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
         }
 
         if (res.conclusionType !== 'success') job.summary.diffs++;
-        if (res.conclusionType === 'error' && res.conclusion.includes("missing")) job.summary.missing++;
+        if (res.conclusion.includes("Source missing")) job.summary.missing++;
+        if (res.conclusion.includes("GHOST")) job.summary.ghosts++;
         if (res.conclusion === 'Object Baru (Siap Naik ke Master)') job.summary.new++;
 
         if (job.summary.processed % 1000 === 0) {
@@ -363,12 +364,21 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                                         // 1. Remove "SYS_Cxxxx" constraint names (system generated)
                                         let clean = ddl.replace(/"?SYS_C\w+"?/g, "SYS_C_IGNORED");
 
+                                        // 1b. Remove "SYS_LOBxxxx" and "SYS_ILxxxx" (LOB Segment & Index names system generated)
+                                        clean = clean.replace(/"?SYS_LOB\d+\$\$?"?/g, "SYS_LOB_IGNORED");
+                                        clean = clean.replace(/"?SYS_IL\d+\$\$?"?/g, "SYS_IL_IGNORED");
+
                                         // 2. Remove whitespace/newlines standardization
                                         clean = clean.replace(/\s+/g, ' ').trim();
 
                                         // 3. For TABLES: Sort columns/constraints to ignore order
                                         if (type === 'TABLE') {
                                             clean = sortTableContent(clean);
+                                        }
+
+                                        // 4. For SEQUENCES: Ignore START WITH value (differs between envs)
+                                        if (type === 'SEQUENCE') {
+                                            clean = clean.replace(/START WITH \d+/gi, "START WITH (IGNORED)");
                                         }
 
                                         return clean;
@@ -459,7 +469,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                                 }
                             } else {
                                 if (!item.inExcel) {
-                                    item.conclusion = "Identik (Tidak di Excel)";
+                                    item.conclusion = "Tidak ada perubahan";
                                     item.conclusionType = 'success';
                                 } else {
                                     item.conclusion = "Sudah Sync (Done)";
@@ -545,7 +555,10 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                     if (inExcel && !inSlave) {
                         text = "Source missing";
                         type = 'error';
-                    } else if (inSlave && inMaster) {
+                        // Logic di bawah akan override ini jika kondisi lebih spesifik
+                    }
+
+                    if (inSlave && inMaster) {
                         // Handled in batch
                     } else if (!inSlave && inMaster) {
                         if (!inExcel) {
@@ -554,6 +567,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                         } else {
                             text = "Source missing (Ada di Master)";
                             type = 'error';
+                            // Logic below will categorize generic missing if needed
                         }
                     } else if (inSlave && !inMaster) {
                         if (!inExcel) {
@@ -564,7 +578,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                             type = 'info';
                         }
                     } else if (!inSlave && !inMaster && inExcel) {
-                        text = "Source missing (Hanya di Excel)";
+                        text = "GHOST OBJECT (Hanya di Excel, Tidak di DB)";
                         type = 'error';
                     }
 

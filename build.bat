@@ -10,20 +10,12 @@ echo Cleaning up previous builds (optional)...
 REM rd /s /q .next
 
 echo Checking dependencies...
-if exist dependencies_installed.flag (
-    echo Dependencies already installed. Skipping 'npm install'...
-) else (
-    if exist node_modules (
-        echo node_modules folder found. Skipping 'npm install'...
-    ) else (
-        echo Installing dependencies...
-        call npm install
-        if %ERRORLEVEL% NEQ 0 (
-            echo Failed to install dependencies.
-            pause
-            exit /b %ERRORLEVEL%
-        )
-    )
+echo Installing dependencies...
+call npm install
+if %ERRORLEVEL% NEQ 0 (
+    echo Failed to install dependencies.
+    pause
+    exit /b %ERRORLEVEL%
 )
 
 echo Running build process...
@@ -45,7 +37,7 @@ echo      FINALIZING STANDALONE BUILD
 echo ==========================================
 echo.
 
-echo Copying 'public' folder (Models & Assets)...
+echo Copying 'public' folder (Models and Assets)...
 xcopy /E /I /Y public .next\standalone\public >nul
 
 echo Copying 'bin' folder (OC Executable)...

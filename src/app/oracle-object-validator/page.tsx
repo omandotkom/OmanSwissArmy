@@ -23,6 +23,12 @@ export default function OracleObjectValidatorPage() {
             description: "Deep analysis of objects across Master (Higher Environment), Slave (Lower Environment), and Excel Object DB. Detect unlisted changes and sync status.",
             icon: <Settings className="h-6 w-6 text-purple-400" />,
         },
+        {
+            href: "/oracle-object-validator/object-db-merger",
+            title: "Object DB Merger",
+            description: "Merge multiple Object DB Excel files into a single consolidated file. Validates for duplicates and generates a merged report.",
+            icon: <CheckCircle className="h-6 w-6 text-orange-400" />,
+        },
     ];
 
     return (

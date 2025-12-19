@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Search, Sparkles, BrainCircuit, Loader2, AlertTriangle } from "lucide-react";
+import { Search, Sparkles, BrainCircuit, Loader2, AlertTriangle, Settings, X, Database, Bot, FileUp, RefreshCcw, Info, Heart } from "lucide-react";
 import { toolGroups } from "@/data/tools";
 import { useAiSearch } from "@/hooks/useAiSearch";
+import ConnectionManager from "@/components/ConnectionManager";
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAiMode, setIsAiMode] = useState(false);
   const [dependencies, setDependencies] = useState<{ oc: boolean; ai: boolean }>({ oc: true, ai: true });
+
+  // Settings Modal State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeSetting, setActiveSetting] = useState("connection-manager");
 
   useEffect(() => {
     // Check system dependencies on load
@@ -91,7 +96,17 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start bg-zinc-950 p-6 font-sans text-zinc-100">
+    <div className="flex min-h-screen flex-col items-center justify-start bg-zinc-950 p-6 font-sans text-zinc-100 relative">
+      <div className="absolute top-6 right-6 z-10">
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full transition-all"
+          title="Settings"
+        >
+          <Settings className="w-6 h-6" />
+        </button>
+      </div>
+
       <main className="w-full max-w-7xl">
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-light tracking-wide text-zinc-200">
@@ -230,6 +245,141 @@ export default function Home() {
           ))
         )}
       </main>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl w-full max-w-5xl h-[85vh] flex overflow-hidden shadow-2xl relative">
+
+            {/* Panel 1: Settings Navigation (Sidebar) */}
+            <div className="w-64 border-r border-zinc-800 bg-zinc-900/30 flex flex-col shrink-0">
+              <div className="p-4 border-b border-zinc-800 flex items-center gap-2 bg-zinc-900/50">
+                <Settings className="w-4 h-4 text-zinc-400" />
+                <span className="font-semibold text-zinc-200 text-sm">Preferences</span>
+              </div>
+              <div className="flex-1 p-2 space-y-1 overflow-y-auto">
+                <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Services
+                </div>
+                <button
+                  onClick={() => setActiveSetting("connection-manager")}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "connection-manager"
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
+                    }`}
+                >
+                  <Database className="w-4 h-4" />
+                  Oracle Connections
+                </button>
+                <button
+                  onClick={() => setActiveSetting("ai-models")}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "ai-models"
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
+                    }`}
+                >
+                  <Bot className="w-4 h-4" />
+                  AI Models
+                </button>
+
+                <div className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider mt-4">
+                  System
+                </div>
+                <button
+                  onClick={() => setActiveSetting("export")}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "export"
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
+                    }`}
+                >
+                  <FileUp className="w-4 h-4" />
+                  Export
+                </button>
+                <button
+                  onClick={() => setActiveSetting("update")}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "update"
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
+                    }`}
+                >
+                  <RefreshCcw className="w-4 h-4" />
+                  Update
+                </button>
+                <button
+                  onClick={() => setActiveSetting("about")}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "about"
+                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
+                    }`}
+                >
+                  <Info className="w-4 h-4" />
+                  About
+                </button>
+              </div>
+
+              <div className="p-4 border-t border-zinc-800 text-xs text-zinc-600 text-center">
+                v0.1.0-beta
+              </div>
+            </div>
+
+            {/* Panel 2: Content */}
+            <div className="flex-1 flex flex-col bg-zinc-950 relative min-w-0">
+              {/* Header for Content Panel */}
+              <div className="h-14 px-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/30 shrink-0">
+                <h3 className="font-medium text-zinc-200 capitalize">
+                  {activeSetting.replace(/-/g, " ")}
+                </h3>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden relative">
+                {activeSetting === "connection-manager" && (
+                  <ConnectionManager
+                    isOpen={true}
+                    onClose={() => { }}
+                    embedded={true}
+                  />
+                )}
+
+                {(activeSetting === "ai-models" || activeSetting === "export" || activeSetting === "update") && (
+                  <div className="flex flex-col items-center justify-center h-full text-zinc-500 bg-zinc-900/20">
+                    <Sparkles className="w-12 h-12 mb-4 opacity-20" />
+                    <h4 className="text-xl font-medium text-zinc-400 mb-2">Coming Soon</h4>
+                    <p className="text-sm">This feature is currently under development.</p>
+                  </div>
+                )}
+
+                {activeSetting === "about" && (
+                  <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-zinc-900/20">
+                    <div className="p-4 bg-zinc-900 rounded-full mb-6 border border-zinc-800 shadow-xl">
+                      <BrainCircuit className="w-12 h-12 text-blue-500" />
+                    </div>
+                    <h1 className="text-3xl font-light tracking-wide text-zinc-100 mb-2">
+                      Oman Swiss Army Tool
+                    </h1>
+                    <div className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-mono text-zinc-500 mb-6">
+                      v0.1.0-beta
+                    </div>
+                    <p className="text-zinc-400 max-w-md leading-relaxed mb-12">
+                      A comprehensive suite of developer utilities designed to streamline your daily workflow, from database management to code utilities.
+                    </p>
+
+                    <div className="flex items-center gap-2 text-zinc-500 text-sm animate-pulse">
+                      <span>Created by Oman with</span>
+                      <Heart className="w-4 h-4 text-red-500 fill-red-500" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

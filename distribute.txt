@@ -56,3 +56,6 @@ CATATAN TEKNIS
 - Script `build.bat` sudah dimodifikasi untuk otomatis meng-copy file
   `scripts/start_standalone.bat` menjadi `start.bat` di folder distribusi.
 - Aplikasi berjalan di Port 1998 (http://localhost:1998).
+
+
+Create release ./gh release create v1.0.0 "C:\SM_WORKSPACE\OmanSwissArmyTool\oman-swiss-army-tool\.next\OmanSwissArmyToolV1-beta.zip" --title "Release v1.0.0" --notes "Initial release"
