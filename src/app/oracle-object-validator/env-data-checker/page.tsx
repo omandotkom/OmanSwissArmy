@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, Database, CheckCircle2, Play, Table as TableIcon, Settings2, RefreshCw, X, Search, ChevronRight, ArrowRightLeft, Loader2 } from "lucide-react";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
@@ -36,7 +36,7 @@ interface ComparisonResult {
 
 type CheckStatus = { id: string; name: string; host: string; status: 'pending' | 'testing' | 'success' | 'error'; message?: string };
 
-export default function EnvDataChecker() {
+function EnvDataCheckerContent() {
     const [connections, setConnections] = useState<OracleConnection[]>([]);
 
     // Connection Selection State
@@ -722,5 +722,13 @@ export default function EnvDataChecker() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function EnvDataChecker() {
+    return (
+        <Suspense fallback={<div className="flex h-screen items-center justify-center bg-zinc-950 text-zinc-500"><Loader2 className="animate-spin w-8 h-8" /></div>}>
+            <EnvDataCheckerContent />
+        </Suspense>
     );
 }

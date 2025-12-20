@@ -4,9 +4,11 @@
 
 /* eslint-disable no-restricted-globals */
 
+export { };
+
 // Define types locally since we can't easily import from main app in a purely isolated worker without setup
 // Simplified types for the worker
-type OracleConnection = {
+type WorkerOracleConnection = {
     id: string;
     name: string;
     username: string;
@@ -15,19 +17,19 @@ type OracleConnection = {
 
 type AutoMappingRequest = {
     owners: string[];
-    connections: OracleConnection[];
+    connections: WorkerOracleConnection[];
     env1Keyword: string;
     env2Keyword: string;
 };
 
 type MappingResult = {
     [ownerName: string]: {
-        env1: OracleConnection | null;
-        env2: OracleConnection | null;
+        env1: WorkerOracleConnection | null;
+        env2: WorkerOracleConnection | null;
     }
 };
 
-const findBestMatches = (owner: string, connections: OracleConnection[], preferredKeyword: string = "") => {
+const findBestMatches = (owner: string, connections: WorkerOracleConnection[], preferredKeyword: string = "") => {
     const candidates = connections.filter(c => {
         const cName = c.name.toUpperCase();
         const cUser = c.username.toUpperCase();

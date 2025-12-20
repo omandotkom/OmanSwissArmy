@@ -1,0 +1,43 @@
+
+# TODO: Regression Testing Checklist
+Dikarenakan adanya perubahan pada sistem Tracking (Global) dan perbaikan struktur file Worker untuk sistem Build, serta perbaikan Suspense Boundary di Env Data Checker, berikut adalah fitur yang TERIMPACT dan HARUS diretest secara manual.
+
+## 1. Global App Stability (Priority: High)
+[ ] **Navigation Test:** Buka halaman Home, pindah ke menu lain (misal: JSON Formatter). Pastikan pindah halaman terasa instan dan tidak ada lag.
+[ ] **Dev Console Check:** Buka Developer Tools (F12) -> Console. Pastikan tidak ada Error Merah yang berkaitan dengan `ActivityTracker` atau `Worker`.
+    - *Expected:* Di mode `npm run dev`, harusnya muncul log `📝 [DevTracker] ...` setiap klik/pindah halaman.
+
+## 2. Oracle Object Validator - Env Checker (Priority: Medium)
+*File yang diubah:* `src/app/oracle-object-validator/env-checker/auto-mapping.worker.ts`
+[ ] **Fitur Auto Mapping:**
+    1. Buka halaman **Env Checker**.
+    2. Coba trigger fitur yang otomatis memasangkan koneksi.
+    3. Pastikan rekomendasi mapping muncul dan akurat.
+
+## 3. Oracle Object Validator - Three Way Comparison (Priority: Medium)
+*File yang diubah:* `src/app/oracle-object-validator/three-way-comparison/auto-mapping.worker.ts`
+[ ] **Fitur Auto Mapping:**
+    1. Buka halaman **Three Way Comparison**.
+    2. Coba trigger fitur yang otomatis memasangkan koneksi.
+    3. Pastikan rekomendasi mapping muncul dan akurat.
+
+## 4. Oracle Object Validator - Env Data Checker (Priority: High)
+*File yang diubah:* `src/app/oracle-object-validator/env-data-checker/page.tsx`
+[ ] **Halaman Load:**
+    1. Buka halaman **Env Data Checker** (`/oracle-object-validator/env-data-checker`).
+    2. Pastikan halaman terbuka normal (mungkin ada loading spinner sebentar).
+    3. Pastikan TIDAK ADA pesan error "Application error: a client-side exception has occurred" atau error Suspense.
+
+## 6. Layout & Global Suspense - (Priority: High)
+*File yang diubah:* src/app/layout.tsx
+[ ] **Tracker Loading Check:**
+    1. Refresh halaman utama (Hard Refresh Ctrl+F5).
+    2. Pastikan TIDAK ADA kedipan aneh atau elemen layout yang bergeser sesaat.
+    3. Pastikan fitur tracking tetap jalan (Cek Console: [DevTracker]).
+
+## 7. Re-Check Env Data Checker - (Priority: Medium)
+*File yang diubah:* src/app/oracle-object-validator/env-data-checker/page.tsx
+[ ] **Loading State:**
+    1. Buka halaman Env Data Checker.
+    2. Perhatikan saat pertama kali buka, apakah spinner loading muncul di tengah layar dengan benar?
+    3. Pastikan layout tidak rusak.
