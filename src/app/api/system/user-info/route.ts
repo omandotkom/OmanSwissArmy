@@ -10,15 +10,6 @@ export async function GET() {
         const envDomain = process.env.USERDOMAIN;
         const envUser = process.env.USERNAME || process.env.USER;
 
-        console.log("🔍 [Debug API] System User Detection:");
-        try {
-            console.log(" - os.userInfo():", JSON.stringify(userInfo));
-        } catch (e) {
-            console.log(" - os.userInfo(): Error reading");
-        }
-        console.log(" - env.USERDOMAIN:", envDomain);
-        console.log(" - env.USERNAME:", envUser);
-
         let finalUsername = 'unknown-user';
 
         // 1. Prioritas Utama: Gabungan Domain + User dari Env (Paling lengkap ala Windows)
@@ -33,8 +24,6 @@ export async function GET() {
         else if (envUser) {
             finalUsername = envUser;
         }
-
-        console.log("✅ [Debug API] Final Username:", finalUsername);
 
         return NextResponse.json({ username: finalUsername });
     } catch (error) {
