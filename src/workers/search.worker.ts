@@ -2,7 +2,6 @@ import { pipeline, env } from '@xenova/transformers';
 import { toolGroups } from '../data/tools';
 
 // Configuration
-// We keep the local model configuration as per previous setup
 env.allowLocalModels = true;
 env.allowRemoteModels = false;
 env.localModelPath = '/models/';
@@ -33,7 +32,7 @@ function cosineSimilarity(vecA: Float32Array | number[], vecB: Float32Array | nu
 }
 
 // Event Listener
-self.addEventListener('message', async (event: MessageEvent) => {
+self.onmessage = async (event: MessageEvent) => {
     const { type, payload } = event.data;
 
     try {
@@ -49,7 +48,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
 
                 // Load Pipeline
                 // console.log('[Worker] Loading Pipeline...');
-                pipelineInstance = await pipeline('feature-extraction', 'all-MiniLM-L6-v2', {
+                pipelineInstance = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
                     progress_callback: (data: any) => {
                         if (data.status === 'progress') {
                             self.postMessage({ type: 'progress', payload: data.progress });
@@ -77,8 +76,6 @@ self.addEventListener('message', async (event: MessageEvent) => {
 
             case 'search':
                 if (!pipelineInstance || !embeddingsCache) {
-                    // If search requested but not ready, try to init or just return empty
-                    // Usually the UI prevents this, but reliable worker handles it.
                     self.postMessage({ type: 'results', payload: [] });
                     return;
                 }
@@ -109,4 +106,4 @@ self.addEventListener('message', async (event: MessageEvent) => {
         self.postMessage({ type: 'error', payload: error.message || 'Unknown error in worker' });
         isIndexing = false;
     }
-});
+};
