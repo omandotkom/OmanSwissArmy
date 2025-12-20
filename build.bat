@@ -80,7 +80,7 @@ tar -a -c -f "%ZIP_NAME%" -C ".next\standalone" .
 
 echo.
 echo Creating GitHub Release v%APP_VERSION%...
-call gh release create v%APP_VERSION% "%ZIP_NAME%" --title "v%APP_VERSION% Beta" --generate-notes --prerelease
+call gh release create v%APP_VERSION% "%ZIP_NAME%" --title "v%APP_VERSION%" --generate-notes
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
