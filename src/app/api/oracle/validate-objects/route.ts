@@ -121,6 +121,43 @@ async function getDDL(conn: oracledb.Connection, owner: string, type: string, na
     }
 }
 
+// Helper to get Column Metadata
+async function getColumnMeta(conn: oracledb.Connection, owner: string, tableName: string, colName: string) {
+    try {
+        // 0. Sanity Check: Is the table visible?
+        const tableCheck = await conn.execute(
+            `SELECT OBJECT_NAME FROM ALL_OBJECTS WHERE OWNER = :owner AND OBJECT_NAME = :tableName AND OBJECT_TYPE = 'TABLE'`,
+            { owner: owner.toUpperCase(), tableName: tableName.toUpperCase() }
+        );
+        if ((tableCheck.rows?.length || 0) === 0) {
+            return { error: 'TABLE_NOT_FOUND' };
+        }
+
+        // 1. Check Column
+        const result = await conn.execute(
+            `SELECT DATA_TYPE, DATA_LENGTH, CHAR_LENGTH, NULLABLE 
+             FROM ALL_TAB_COLUMNS 
+             WHERE OWNER = :owner AND TABLE_NAME = :tableName AND COLUMN_NAME = :colName`,
+            {
+                owner: owner.toUpperCase(),
+                tableName: tableName.toUpperCase(),
+                colName: colName.toUpperCase()
+            },
+            { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        );
+
+        const row = result.rows?.[0] as any;
+        if (!row) {
+            return null;
+        }
+        return row;
+
+    } catch (e: any) {
+        console.error("getColumnMeta Error:", e.message);
+        return null;
+    }
+}
+
 export async function POST(req: NextRequest) {
     let conn1: oracledb.Connection | null = null;
     let conn2: oracledb.Connection | null = null;
@@ -148,36 +185,137 @@ export async function POST(req: NextRequest) {
 
         const results = [];
 
-        // Configure DBMS_METADATA (Optional: to reduce noise like SEGMENT ATTRIBUTES)
-        // We could run `EXEC DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM,'SEGMENT_ATTRIBUTES',false);`
-        // For now, raw.
-
         for (const item of items) {
-            const { owner, name, type } = item;
-
-            // Parallel fetch could be faster, but sequential is safer for connection pool/resource limits initially
-            const ddl1Raw = await getDDL(conn1, owner, type, name);
-            const ddl2Raw = await getDDL(conn2, owner, type, name);
-
+            const { owner, name, type, validationScript } = item;
             let status = 'UNKNOWN';
-            let message = '';
+            let ddl1Raw: string | null = null;
+            let ddl2Raw: string | null = null;
 
-            if (ddl1Raw === null && ddl2Raw === null) {
-                status = 'MISSING_IN_BOTH';
-            } else if (ddl1Raw === null) {
-                status = 'MISSING_IN_SOURCE';
-            } else if (ddl2Raw === null) {
-                status = 'MISSING_IN_TARGET';
-            } else {
-                const norm1 = normalizeDDL(ddl1Raw, type);
-                const norm2 = normalizeDDL(ddl2Raw, type);
+            // SPECIAL HANDLING FOR 'COLUMN' TYPE (From Excel 'Column' sheet or 'Column Table')
+            if ((type === 'COLUMN' || type === 'COLUMN_TABLE') && validationScript) {
+                // Match ADD, MODIFY or RENAME (Single)
+                let colName = null;
+                let multiCols: string[] = [];
 
-                if (norm1 === norm2) {
-                    status = 'MATCH';
+                // 1. Try Single Column Parsing first (Priority)
+                // Try Single ADD (no parenthesis logic or simple)
+                let match = validationScript.match(/ADD\s+([a-zA-Z0-9_$#]+)/i);
+                if (match) colName = match[1];
+
+                if (!colName) {
+                    match = validationScript.match(/MODIFY\s+(?:["(])?([a-zA-Z0-9_$#]+)/i);
+                    if (match) colName = match[1];
+                }
+
+                if (!colName) {
+                    match = validationScript.match(/RENAME\s+COLUMN\s+.*\s+TO\s+(?:["(])?([a-zA-Z0-9_$#]+)/i);
+                    if (match) colName = match[1];
+                }
+
+                // 2. Fallback: Multi-Column Parsing (ADD ( ... ))
+                if (!colName) {
+                    const multiMatch = validationScript.match(/ADD\s*\(([\s\S]+)\)/i);
+                    if (multiMatch) {
+                        const content = multiMatch[1];
+                        // Split by comma, extract first word of each segment
+                        multiCols = content.split(',').map((part: string) => {
+                            const trimmed = part.trim();
+                            // Take first word
+                            const firstWord = trimmed.split(/\s+/)[0];
+                            return firstWord.replace(/"/g, '').trim();
+                        }).filter((c: string) => c && c.length > 0);
+                    }
+                }
+
+                if (colName) {
+                    colName = colName.replace(/"/g, '').trim();
+                }
+
+                if (!colName && multiCols.length === 0) {
+                    status = 'ERROR';
+                    ddl1Raw = `Could not parse COLUMN name from query: ${validationScript}`;
+                }
+                else if (multiCols.length > 0) {
+                    // MULTI COLUMN VALIDATION
+                    let allMatch = true;
+                    let anySourceMissing = false;
+                    let anyTargetMissing = false;
+                    let details = [];
+
+                    for (const col of multiCols) {
+                        const meta1 = await getColumnMeta(conn1, owner, name, col);
+                        const meta2 = await getColumnMeta(conn2, owner, name, col);
+
+                        let colStatus = 'MATCH';
+                        if (!meta1 && !meta2) { colStatus = 'MISSING_BOTH'; allMatch = false; anySourceMissing = true; anyTargetMissing = true; }
+                        else if (!meta1) { colStatus = 'MISSING_SOURCE'; allMatch = false; anySourceMissing = true; }
+                        else if (!meta2) { colStatus = 'MISSING_TARGET'; allMatch = false; anyTargetMissing = true; }
+                        else {
+                            const isMatch = meta1.DATA_TYPE === meta2.DATA_TYPE &&
+                                meta1.DATA_LENGTH === meta2.DATA_LENGTH &&
+                                meta1.NULLABLE === meta2.NULLABLE;
+                            if (!isMatch) { colStatus = 'DIFF'; allMatch = false; }
+                        }
+
+                        details.push({ col, status: colStatus, m1: meta1, m2: meta2 });
+                    }
+
+                    if (allMatch) status = 'MATCH';
+                    else if (anySourceMissing && anyTargetMissing && multiCols.length === 1) status = 'MISSING_IN_BOTH'; // Only reasonable for single item effectively
+                    else if (anySourceMissing) status = 'MISSING_IN_SOURCE'; // Partial missing is missing
+                    else status = 'DIFF';
+
+                    const report = `--- Multi-Column Validation ---\nTable: ${name}\nCols: ${multiCols.join(', ')}\n\n` +
+                        details.map(d => `[${d.col}] -> ${d.status}\nSource: ${JSON.stringify(d.m1)}\nTarget: ${JSON.stringify(d.m2)}`).join('\n\n');
+
+                    ddl1Raw = report;
+                    ddl2Raw = report;
+
+                }
+                else {
+                    // SINGLE COLUMN VALIDATION (Existing Logic)
+                    const meta1 = await getColumnMeta(conn1, owner, name, colName!); // colName is guaranteed here
+                    const meta2 = await getColumnMeta(conn2, owner, name, colName!);
+
+                    // Debug Info included in DDL view
+                    const parsedInfo = `--- Parsed Info ---\nColumn: ${colName}\nTable: ${name}\nOwner: ${owner}\nScript: ${validationScript}\n\n`;
+
+                    ddl1Raw = parsedInfo + (meta1 ? JSON.stringify(meta1, null, 2) : "MISSING (Or Table Not Visible)");
+                    ddl2Raw = parsedInfo + (meta2 ? JSON.stringify(meta2, null, 2) : "MISSING (Or Table Not Visible)");
+
+                    if (!meta1 && !meta2) status = 'MISSING_IN_BOTH';
+                    else if (!meta1) status = 'MISSING_IN_SOURCE';
+                    else if (!meta2) status = 'MISSING_IN_TARGET';
+                    else {
+                        // Compare Metadata
+                        const isMatch = meta1.DATA_TYPE === meta2.DATA_TYPE &&
+                            meta1.DATA_LENGTH === meta2.DATA_LENGTH &&
+                            meta1.NULLABLE === meta2.NULLABLE;
+                        status = isMatch ? 'MATCH' : 'DIFF';
+                    }
+                }
+            }
+            // STANDARD HANDLING FOR OTHER OBJECTS (Table, Procedure, etc)
+            else {
+                // Parallel fetch could be faster, but sequential is safer for connection pool/resource limits initially
+                ddl1Raw = await getDDL(conn1, owner, type, name);
+                ddl2Raw = await getDDL(conn2, owner, type, name);
+
+                if (ddl1Raw === null && ddl2Raw === null) {
+                    status = 'MISSING_IN_BOTH';
+                } else if (ddl1Raw === null) {
+                    status = 'MISSING_IN_SOURCE';
+                } else if (ddl2Raw === null) {
+                    status = 'MISSING_IN_TARGET';
                 } else {
-                    status = 'DIFF';
-                    // We could return diffs here, but full DDL might be large.
-                    // Just return flag for now.
+                    const norm1 = normalizeDDL(ddl1Raw, type);
+                    const norm2 = normalizeDDL(ddl2Raw, type);
+
+                    if (norm1 === norm2) {
+                        status = 'MATCH';
+                    } else {
+                        status = 'DIFF';
+                    }
                 }
             }
 
@@ -192,6 +330,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ results });
 
     } catch (error: any) {
+
         console.error("Validation error", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     } finally {

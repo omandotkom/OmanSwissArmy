@@ -39,6 +39,12 @@ export const toolGroups = [
                 description: "Test and debug API endpoints with ease.",
             },
             {
+                href: "/sqlite-browser",
+                title: "SQLite Browser",
+                description: "Open and browse SQLite (.db) files locally.",
+                isNew: true,
+            },
+            {
                 href: "/markdown-preview",
                 title: "Markdown Preview",
                 description: "Preview Markdown syntax in real-time.",

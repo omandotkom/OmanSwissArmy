@@ -18,6 +18,10 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
+echo Preparing WASM assets...
+if not exist "public\wasm" mkdir "public\wasm"
+copy /Y "node_modules\sql.js\dist\sql-wasm.wasm" "public\wasm\" >nul
+
 echo Running build process...
 call npm run build
 

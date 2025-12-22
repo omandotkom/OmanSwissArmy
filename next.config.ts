@@ -8,12 +8,23 @@ const nextConfig: NextConfig = {
   output: "standalone",
   /* config options here */
   turbopack: {},
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       "sharp$": false,
       "onnxruntime-node$": false,
     }
+
+    // Client-side polyfill/mock for modules needed by libraries like sql.js/transformers
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+    }
+
     return config;
   },
 };

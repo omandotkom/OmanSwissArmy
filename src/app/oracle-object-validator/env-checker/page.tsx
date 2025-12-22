@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, Database, Settings2, CheckCircle2, Play, X, Download, FileDiff, ListChecks } from "lucide-react";
 import * as XLSX from "xlsx";
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor, Editor } from "@monaco-editor/react";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
 
@@ -38,6 +38,10 @@ export default function ObjectDBEnvChecker() {
     const [comparisonResults, setComparisonResults] = useState<any[] | null>(null);
     const [showResults, setShowResults] = useState(false);
     const [showIssuedOnly, setShowIssuedOnly] = useState(false);
+
+    // Error Popup State
+    const [showErrorPopup, setShowErrorPopup] = useState(false);
+    const [errorPopupData, setErrorPopupData] = useState<{ ddl: string, script: string } | null>(null);
 
     // Owner & Connection Logic
     const [detectedOwners, setDetectedOwners] = useState<string[]>([]);
@@ -239,7 +243,7 @@ export default function ObjectDBEnvChecker() {
                     // Normalize keys (handle case sensitivity if needed)
                     // Common variations: "Object Name", "OBJECT NAME", "Object Type", etc.
                     const owner = String(row['OWNER'] || row['owner'] || row['Owner'] || '').trim();
-                    const name = String(row['OBJECT_NAME'] || row['object_name'] || row['Object Name'] || row['OBJECT NAME'] || row['NAME'] || row['name'] || row['Name'] || '').trim();
+                    const name = String(row['OBJECT_NAME'] || row['object_name'] || row['Object Name'] || row['OBJECT NAME'] || row['NAME'] || row['name'] || row['Name'] || row['TABLE_NAME'] || row['table_name'] || row['Table Name'] || '').trim();
                     let type = String(row['OBJECT_TYPE'] || row['object_type'] || row['Object Type'] || row['OBJECT TYPE'] || row['TYPE'] || row['type'] || row['Type'] || '').trim();
 
                     // Fallback to Sheet Name if Type is missing
@@ -259,11 +263,20 @@ export default function ObjectDBEnvChecker() {
                         type = sheetType;
                     }
 
+                    // Capture Validation Script (QUERY or Last Column)
+                    let validationScript = '';
+                    if (row['QUERY']) {
+                        validationScript = String(row['QUERY']).trim();
+                    } else if (sheet.headers.length > 0) {
+                        const lastHeader = sheet.headers[sheet.headers.length - 1];
+                        validationScript = String(row[lastHeader] || '').trim();
+                    }
+
                     if (owner && name && type) {
                         // Create a unique key for deduplication
                         const uniqueKey = `${owner.toUpperCase()}|${name.toUpperCase()}|${type.toUpperCase()}`;
                         if (!uniqueItemsMap.has(uniqueKey)) {
-                            uniqueItemsMap.set(uniqueKey, { owner, name, type });
+                            uniqueItemsMap.set(uniqueKey, { owner, name, type, validationScript });
                         }
                     }
                 });
@@ -286,10 +299,10 @@ export default function ObjectDBEnvChecker() {
                     if (firstSheet && firstSheet.data.length > 0) {
                         const firstRow = firstSheet.data[0];
                         const hasOwner = firstRow['OWNER'] || firstRow['owner'] || firstRow['Owner'];
-                        const hasName = firstRow['OBJECT_NAME'] || firstRow['object_name'] || firstRow['Object Name'] || firstRow['OBJECT NAME'] || firstRow['NAME'] || firstRow['name'] || firstRow['Name'];
+                        const hasName = firstRow['OBJECT_NAME'] || firstRow['object_name'] || firstRow['Object Name'] || firstRow['OBJECT NAME'] || firstRow['NAME'] || firstRow['name'] || firstRow['Name'] || firstRow['TABLE_NAME'] || firstRow['table_name'] || firstRow['Table Name'];
 
                         if (!hasOwner) missingColumns.add("OWNER");
-                        if (!hasName) missingColumns.add("OBJECT_NAME");
+                        if (!hasName) missingColumns.add("OBJECT_NAME (or TABLE_NAME)");
                     }
 
                     if (missingColumns.size > 0) {
@@ -1227,20 +1240,95 @@ export default function ObjectDBEnvChecker() {
                                                                     if (res?.status === 'DIFF') {
                                                                         e.stopPropagation();
                                                                         handleViewDiff(res);
+                                                                    } else if (res?.status === 'ERROR') {
+                                                                        e.stopPropagation();
+                                                                        setIsFetchingDiff(true);
+
+                                                                        // Trick: Request as 'TABLE' to force Backend to fetch Table DDL
+                                                                        const tempItem = { ...res.item, type: 'TABLE' };
+                                                                        const ownerEnv = ownerMappings[res.item.owner?.toUpperCase()];
+
+                                                                        if (!ownerEnv?.env1) {
+                                                                            alert("Missing Source Connection for " + res.item.owner);
+                                                                            setIsFetchingDiff(false);
+                                                                            return;
+                                                                        }
+
+                                                                        fetch('/api/oracle/validate-objects', {
+                                                                            method: 'POST',
+                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                            body: JSON.stringify({
+                                                                                items: [tempItem],
+                                                                                env1: ownerEnv.env1,
+                                                                                env2: ownerEnv.env1, // Dummy, we only need Source DDL
+                                                                                fetchDDL: true
+                                                                            })
+                                                                        })
+                                                                            .then(r => r.json())
+                                                                            .then(data => {
+                                                                                const tableDDL = data.results?.[0]?.ddl1 || "-- Failed to fetch Table DDL --";
+                                                                                setErrorPopupData({
+                                                                                    ddl: tableDDL,
+                                                                                    script: res.item.validationScript || "-- No Script Available --"
+                                                                                });
+                                                                                setShowErrorPopup(true);
+                                                                            })
+                                                                            .catch(err => alert("Fetch Error: " + err.message))
+                                                                            .finally(() => setIsFetchingDiff(false));
                                                                     }
                                                                 }}
-                                                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${res?.status === 'DIFF' ? 'cursor-pointer hover:bg-orange-500/20 active:scale-95' : 'cursor-default'
+                                                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${(res?.status === 'DIFF' || res?.status === 'ERROR') ? 'cursor-pointer hover:opacity-80 active:scale-95' : 'cursor-default'
                                                                     } ${res?.status === 'MATCH' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                                                         res?.status === 'DIFF' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
                                                                             res?.status === 'WAITING' ? 'bg-orange-900/20 text-orange-200 border-orange-500/30' :
                                                                                 res?.status === 'CHECKING' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30 animate-pulse' :
-                                                                                    res?.status?.includes('MISSING') ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                                                        'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                                                                    res?.status === 'ERROR' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                                                        res?.status?.includes('MISSING') ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                                                            'bg-zinc-800 text-zinc-400 border-zinc-700'
                                                                     }`}>
                                                                 {res?.status || 'UNKNOWN'}
                                                             </span>
                                                         </td>
-                                                        <td className="p-4 text-xs font-mono text-zinc-500 truncate max-w-xs">{res?.error || (res?.status === 'DIFF' ? 'Content mismatch found' : '')}</td>
+                                                        <td className="p-4 text-xs font-mono text-zinc-500 truncate max-w-xs">
+                                                            {(res?.item?.type === 'COLUMN' || res?.item?.type === 'COLUMN_TABLE') && res?.item?.validationScript && res?.status !== 'MATCH' ? (
+                                                                (() => {
+                                                                    let mm = res.item.validationScript.match(/ADD\s+(?:["(])?([a-zA-Z0-9_$#]+)/i);
+                                                                    let colName = mm ? mm[1] : null;
+
+                                                                    if (!colName) {
+                                                                        mm = res.item.validationScript.match(/MODIFY\s+(?:["(])?([a-zA-Z0-9_$#]+)/i);
+                                                                        colName = mm ? mm[1] : null;
+                                                                    }
+
+                                                                    if (!colName) {
+                                                                        mm = res.item.validationScript.match(/RENAME\s+COLUMN\s+.*\s+TO\s+(?:["(])?([a-zA-Z0-9_$#]+)/i);
+                                                                        colName = mm ? mm[1] : null;
+                                                                    }
+
+                                                                    if (colName) colName = colName.replace(/"/g, '');
+
+                                                                    if (colName) {
+                                                                        return (
+                                                                            <span className="flex items-center gap-2">
+                                                                                <span className="text-zinc-400">Column:</span>
+                                                                                <span className="text-emerald-400 font-bold bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-500/20">
+                                                                                    {colName}
+                                                                                </span>
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span className="text-red-400 flex flex-col gap-1" title={res.item.validationScript}>
+                                                                                <span className="font-bold">Parse Error</span>
+                                                                                <span className="opacity-70 text-[10px] truncate">{res.item.validationScript}</span>
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                })()
+                                                            ) : (
+                                                                res?.error || (res?.status === 'DIFF' ? 'Content mismatch found' : '')
+                                                            )}
+                                                        </td>
                                                     </tr>
                                                 ))
                                         )}
@@ -1473,6 +1561,76 @@ export default function ObjectDBEnvChecker() {
                                 >
                                     OK, Got it
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* Error Debug Popup */}
+                {showErrorPopup && errorPopupData && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-7xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-xl font-bold text-red-500 flex items-center gap-2">
+                                        <FileDiff className="w-5 h-5" /> Parse Error Debug
+                                    </h2>
+                                    <p className="text-zinc-500 text-xs mt-1">Comparing Table Structure vs. Failed Query</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowErrorPopup(false)}
+                                    className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Content - 2 Columns */}
+                            <div className="flex-1 flex overflow-hidden">
+                                {/* Left Column: Table DDL */}
+                                <div className="flex-1 flex flex-col border-r border-zinc-800 min-w-0">
+                                    <div className="bg-zinc-950/50 px-4 py-2 border-b border-zinc-800 text-sm font-mono text-zinc-400 font-bold uppercase tracking-wider">
+                                        Table DDL (Context)
+                                    </div>
+                                    <div className="flex-1 relative">
+                                        <Editor
+                                            height="100%"
+                                            defaultLanguage="sql"
+                                            theme="vs-dark"
+                                            value={errorPopupData.ddl}
+                                            options={{
+                                                readOnly: true,
+                                                minimap: { enabled: false },
+                                                scrollBeyondLastLine: false,
+                                                fontSize: 12,
+                                                wordWrap: "on"
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Failed Query */}
+                                <div className="flex-1 flex flex-col min-w-0">
+                                    <div className="bg-zinc-950/50 px-4 py-2 border-b border-zinc-800 text-sm font-mono text-red-400 font-bold uppercase tracking-wider">
+                                        Query (Check format)
+                                    </div>
+                                    <div className="flex-1 relative bg-zinc-950/30">
+                                        <Editor
+                                            height="100%"
+                                            defaultLanguage="sql"
+                                            theme="vs-dark"
+                                            value={errorPopupData.script}
+                                            options={{
+                                                readOnly: true,
+                                                minimap: { enabled: false },
+                                                scrollBeyondLastLine: false,
+                                                fontSize: 12,
+                                                wordWrap: "on",
+                                                lineNumbers: "off"
+                                            }}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

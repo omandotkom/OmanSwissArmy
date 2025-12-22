@@ -1,0 +1,46 @@
+{
+  "COLUMN TABLE": [
+    {
+      "OWNER": "MST_ITEM",
+      "TABLE_NAME": "MST_VENDOR",
+      "COLUMN_NAME": "TYPE_OF_PARTNER_ID",
+      "REMARK": "ADD",
+      "PROJECT": "EPROC",
+      "PIC": "DANANGK",
+      "DEV": "Y",
+      "QA": "Y",
+      "UAT": "",
+      "PRODLIKE": "",
+      "PROD": "",
+      "QUERY": "ALTER TABLE MST_VENDOR ADD TYPE_OF_PARTNER_ID NUMBER;"
+    },
+    {
+      "OWNER": "MST_ITEM",
+      "TABLE_NAME": "MST_VENDOR",
+      "COLUMN_NAME": "TYPE_OF_PARTNER_NAME",
+      "REMARK": "ADD",
+      "PROJECT": "EPROC",
+      "PIC": "DANANGK",
+      "DEV": "Y",
+      "QA": "Y",
+      "UAT": "",
+      "PRODLIKE": "",
+      "PROD": "",
+      "QUERY": "ALTER TABLE MST_VENDOR ADD TYPE_OF_PARTNER_NAME VARCHAR2(200);"
+    },
+    {
+      "OWNER": "MST_ITEM",
+      "TABLE_NAME": "MST_VENDOR",
+      "COLUMN_NAME": "BUSINESS_ENTITY_ID",
+      "REMARK": "ADD",
+      "PROJECT": "EPROC",
+      "PIC": "DANANGK",
+      "DEV": "Y",
+      "QA": "Y",
+      "UAT": "",
+      "PRODLIKE": "",
+      "PROD": "",
+      "QUERY": "ALTER TABLE MST_VENDOR ADD BUSINESS_ENTITY_ID NUMBER;"
+    }
+  ]
+}
