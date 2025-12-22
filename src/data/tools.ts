@@ -14,6 +14,11 @@ export const toolGroups = [
                 platforms: ["win32"],
             },
             {
+                href: "/ssl-decoder",
+                title: "SSL Decoder",
+                description: "Decode certificates, check expiry, and validate chains.",
+            },
+            {
                 href: "/diff-checker",
                 title: "Text Compare",
                 description: "Compare text files and highlight differences.",
