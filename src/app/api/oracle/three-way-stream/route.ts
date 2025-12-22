@@ -4,6 +4,7 @@ import oracledb from 'oracledb';
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
+import { normalizeDDL } from '@/lib/oracle-ddl-helper';
 
 // Global Job Store (In-Memory for simplicity in Standalone App)
 // In production clustered env, use Redis/DB.
@@ -359,89 +360,6 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                                 ]);
 
                                 if (mCode !== null && sCode !== null) {
-                                    // Helper to normalize DDL for comparison (Ignore dynamic names & Sort Table Columns)
-                                    const normalizeDDL = (ddl: string, type: string) => {
-                                        // 1. Remove "SYS_Cxxxx" constraint names (system generated)
-                                        let clean = ddl.replace(/"?SYS_C\w+"?/g, "SYS_C_IGNORED");
-
-                                        // 1b. Remove "SYS_LOBxxxx" and "SYS_ILxxxx" (LOB Segment & Index names system generated)
-                                        clean = clean.replace(/"?SYS_LOB\d+\$\$?"?/g, "SYS_LOB_IGNORED");
-                                        clean = clean.replace(/"?SYS_IL\d+\$\$?"?/g, "SYS_IL_IGNORED");
-
-                                        // 2. Remove whitespace/newlines standardization
-                                        clean = clean.replace(/\s+/g, ' ').trim();
-
-                                        // 3. For TABLES: Sort columns/constraints to ignore order
-                                        if (type === 'TABLE') {
-                                            clean = sortTableContent(clean);
-                                        }
-
-                                        // 4. For SEQUENCES: Enhanced Normalization for comparison
-                                        if (type === 'SEQUENCE') {
-                                            // User Request: Only compare Name (Existence). Ignore all properties.
-                                            return "SEQUENCE_PROPERTIES_IGNORED";
-                                        }
-
-                                        return clean;
-                                    };
-
-                                    // Helper to sort comma-separated definitions inside the main (...) of CREATE TABLE
-                                    const sortTableContent = (ddl: string) => {
-                                        try {
-                                            // Simple parser to find the main body: (...)
-                                            // CREATE TABLE "OWNER"."NAME" (...) segment_attributes
-                                            const firstParen = ddl.indexOf('(');
-                                            if (firstParen === -1) return ddl;
-
-                                            // Find balancing closing parenthesis
-                                            let depth = 0;
-                                            let lastParen = -1;
-                                            for (let i = firstParen; i < ddl.length; i++) {
-                                                if (ddl[i] === '(') depth++;
-                                                else if (ddl[i] === ')') depth--;
-
-                                                if (depth === 0) {
-                                                    lastParen = i;
-                                                    break;
-                                                }
-                                            }
-
-                                            if (lastParen === -1) return ddl; // Malformed or weird
-
-                                            const body = ddl.substring(firstParen + 1, lastParen);
-                                            const pre = ddl.substring(0, firstParen + 1);
-                                            const post = ddl.substring(lastParen);
-
-                                            // Split body by comma, respecting depth
-                                            const parts: string[] = [];
-                                            let current = '';
-                                            let pDepth = 0;
-
-                                            for (let i = 0; i < body.length; i++) {
-                                                const char = body[i];
-                                                if (char === '(') pDepth++;
-                                                else if (char === ')') pDepth--;
-
-                                                if (char === ',' && pDepth === 0) {
-                                                    parts.push(current.trim());
-                                                    current = '';
-                                                } else {
-                                                    current += char;
-                                                }
-                                            }
-                                            if (current.trim()) parts.push(current.trim());
-
-                                            // Sort the parts (columns, constraints)
-                                            // Note: robust enough for standard "COL TYPE" and "CONSTRAINT PK..."
-                                            parts.sort();
-
-                                            return pre + parts.join(', ') + post;
-
-                                        } catch (e) {
-                                            return ddl; // Fallback if parsing fails
-                                        }
-                                    };
-
                                     const mNorm = normalizeDDL(mCode, item.type);
                                     const sNorm = normalizeDDL(sCode, item.type);
 
@@ -462,18 +380,18 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
 
                             if (!isIdentical) {
                                 if (!item.inExcel) {
-                                    item.conclusion = "Terdapat perubahan, tidak terdaftar di OBJECT DB";
+                                    item.conclusion = "Content Mismatch (Unregistered)";
                                     item.conclusionType = 'warning';
                                 } else {
-                                    item.conclusion = "Perubahan Terdaftar (Siap Sync)";
+                                    item.conclusion = "Content Mismatch (Registered)";
                                     item.conclusionType = 'info';
                                 }
                             } else {
                                 if (!item.inExcel) {
-                                    item.conclusion = "Tidak ada perubahan";
+                                    item.conclusion = "Match";
                                     item.conclusionType = 'success';
                                 } else {
-                                    item.conclusion = "Sudah Sync (Done)";
+                                    item.conclusion = "Match (Done)";
                                     item.conclusionType = 'success';
                                 }
                             }
@@ -554,7 +472,7 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                     const timeDiff = item.masterMeta?.last_ddl_time?.toString() !== item.slaveMeta?.last_ddl_time?.toString();
 
                     if (inExcel && !inSlave) {
-                        text = "Source missing";
+                        text = "Missing in Slave";
                         type = 'error';
                         // Logic di bawah akan override ini jika kondisi lebih spesifik
                     }
@@ -563,24 +481,24 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
                         // Handled in batch
                     } else if (!inSlave && inMaster) {
                         if (!inExcel) {
-                            text = "Object belum turun / naik";
+                            text = "Missing in Slave (Unregistered)";
                             type = 'warning';
                         } else {
-                            text = "Source missing (Ada di Master)";
+                            text = "Missing in Slave";
                             type = 'error';
                             // Logic below will categorize generic missing if needed
                         }
                     } else if (inSlave && !inMaster) {
                         if (!inExcel) {
-                            text = "Object liar di Slave (Tidak di Excel)";
+                            text = "Extra in Slave (Unregistered)";
                             type = 'warning';
                         } else {
-                            text = "Object Baru (Siap Naik ke Master)";
+                            text = "Missing in Master";
                             type = 'info';
                         }
                     } else if (!inSlave && !inMaster && inExcel) {
-                        text = "GHOST OBJECT (Hanya di Excel, Tidak di DB)";
-                        type = 'error';
+                        text = "GHOST (Excel Only)";
+                        type = 'warning';
                     }
 
                     if (inSlave && inMaster) {

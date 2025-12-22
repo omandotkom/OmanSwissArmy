@@ -242,6 +242,13 @@ export default function ThreeWayComparisonPage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (!file.name.toLowerCase().includes("threeway") && !file.name.toLowerCase().includes("analysis_report")) {
+            if (!confirm(`The file "${file.name}" may not be a Three-Way Comparison report. Continue?`)) {
+                e.target.value = ''; // Reset
+                return;
+            }
+        }
+
         const reader = new FileReader();
         reader.onload = (evt) => {
             const content = evt.target?.result as string;
@@ -372,7 +379,7 @@ export default function ThreeWayComparisonPage() {
             worksheet['!cols'] = colWidths;
 
             // Write File
-            XLSX.writeFile(workbook, `Analysis_Report_${jobId}.xlsx`);
+            XLSX.writeFile(workbook, `ThreeWay_Analysis_${jobId}.xlsx`);
 
         } catch (e) {
             console.error("Excel generation error", e);
@@ -936,7 +943,16 @@ export default function ThreeWayComparisonPage() {
                                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                                     <ListChecks className="text-blue-500" /> Report Preview
                                 </h3>
-                                <p className="text-xs text-zinc-500">Showing first 300 rows of analysis result.</p>
+                                <div className="text-xs text-zinc-500 mt-1 flex flex-col gap-0.5 ml-8 font-mono">
+                                    {Object.keys(ownerMappings).length > 0 ? (
+                                        <>
+                                            <span>MASTER: <span className="text-zinc-300 font-bold">{Array.from(new Set(Object.values(ownerMappings).map(m => m.master?.name).filter(Boolean))).join(', ') || 'Unknown'}</span></span>
+                                            <span>SLAVE : <span className="text-zinc-300 font-bold">{Array.from(new Set(Object.values(ownerMappings).map(m => m.slave?.name).filter(Boolean))).join(', ') || 'Unknown'}</span></span>
+                                        </>
+                                    ) : (
+                                        <span className="italic text-zinc-600">Source: External/Uploaded Report File</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
@@ -986,14 +1002,15 @@ export default function ThreeWayComparisonPage() {
                                         {(showIssuedOnly
                                             ? previewData.filter(row => {
                                                 const c = String(row['CONCLUSION'] || '');
-                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
+                                                // Exclude "Match" and "Match (Done)"
+                                                return c !== 'Match' && c !== 'Match (Done)' && !c.includes('Match');
                                             })
                                             : previewData
                                         ).slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
                                             <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
                                                 {Object.entries(row).map(([key, val]: [string, any], cIdx) => {
                                                     const isConclusion = key === 'CONCLUSION';
-                                                    const isDiffable = isConclusion && String(val).includes("Terdapat perubahan");
+                                                    const isDiffable = isConclusion && (String(val).includes("Mismatch") || String(val).includes("Terdapat perubahan")); // Backward compat just in case
                                                     return (
                                                         <td
                                                             key={cIdx}
@@ -1026,7 +1043,9 @@ export default function ThreeWayComparisonPage() {
                                 <button
                                     onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
                                     disabled={previewPage === 1}
-                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors"
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewPage === 1
+                                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'}`}
                                 >
                                     Previous
                                 </button>
@@ -1034,10 +1053,7 @@ export default function ThreeWayComparisonPage() {
                                     Page <span className="text-white font-bold">{previewPage}</span> of <span className="text-white font-bold">{
                                         Math.ceil(
                                             (showIssuedOnly
-                                                ? previewData.filter(row => {
-                                                    const c = String(row['CONCLUSION'] || '');
-                                                    return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
-                                                }).length
+                                                ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
                                                 : previewData.length
                                             ) / 200
                                         ) || 1
@@ -1046,23 +1062,25 @@ export default function ThreeWayComparisonPage() {
                                 <button
                                     onClick={() => setPreviewPage(p => Math.min(Math.ceil(
                                         (showIssuedOnly
-                                            ? previewData.filter(row => {
-                                                const c = String(row['CONCLUSION'] || '');
-                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
-                                            }).length
+                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
                                             : previewData.length
                                         ) / 200
                                     ), p + 1))}
                                     disabled={previewPage >= Math.ceil(
                                         (showIssuedOnly
-                                            ? previewData.filter(row => {
-                                                const c = String(row['CONCLUSION'] || '');
-                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
-                                            }).length
+                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
                                             : previewData.length
                                         ) / 200
                                     )}
-                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors"
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewPage >= Math.ceil(
+                                        (showIssuedOnly
+                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
+                                            : previewData.length
+                                        ) / 200
+                                    )
+                                            ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                                            : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
+                                        }`}
                                 >
                                     Next
                                 </button>
@@ -1071,10 +1089,7 @@ export default function ThreeWayComparisonPage() {
                                 <span className="text-xs text-zinc-500 hidden md:inline">
                                     Total {
                                         (showIssuedOnly
-                                            ? previewData.filter(row => {
-                                                const c = String(row['CONCLUSION'] || '');
-                                                return !c.includes("Sudah Sync") && !c.includes("Tidak ada perubahan");
-                                            }).length
+                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
                                             : previewData.length
                                         ).toLocaleString()
                                     } rows loaded.

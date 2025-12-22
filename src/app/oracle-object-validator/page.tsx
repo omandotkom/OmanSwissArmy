@@ -18,6 +18,12 @@ export default function OracleObjectValidatorPage() {
             icon: <Database className="h-6 w-6 text-blue-400" />,
         },
         {
+            href: "/oracle-object-validator/two-way-comparison",
+            title: "Two Way Comparison",
+            description: "Directly compare whole schemas between Master (Source) and Slave (Target) databases. Discover extra or missing objects without Excel.",
+            icon: <Database className="h-6 w-6 text-pink-400" />,
+        },
+        {
             href: "/oracle-object-validator/three-way-comparison",
             title: "Three Way Comparison",
             description: "Deep analysis of objects across Master (Higher Environment), Slave (Lower Environment), and Excel Object DB. Detect unlisted changes and sync status.",
