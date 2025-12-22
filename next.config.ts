@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   },
   output: "standalone",
   /* config options here */
-  turbopack: {},
+  /* config options here */
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
