@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Database, FileSpreadsheet, Upload, X, Eye, ListChecks, Play, Code2, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Database, FileSpreadsheet, Upload, X, Eye, ListChecks, Play, Code2, FileText, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { DiffEditor } from "@monaco-editor/react";
 import { useToast, ToastContainer } from "@/components/ui/toast";
@@ -792,6 +792,15 @@ export default function ThreeWayComparisonPage() {
                             This tool uses streaming technology to handle millions of objects without crashing your browser.
                             Upload an Excel file (Object DB) and map connections to start.
                         </p>
+
+                        <div className="mt-6 mx-auto max-w-lg bg-orange-900/20 border border-orange-700/50 p-4 rounded-lg flex gap-3 text-left">
+                            <AlertCircle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                            <div className="text-sm text-orange-200/80">
+                                <strong className="text-orange-400 block mb-1">Important Note regarding 'COLUMN' types:</strong>
+                                Objects of type <code className="bg-black/30 px-1 rounded text-orange-300">COLUMN</code> or <code className="bg-black/30 px-1 rounded text-orange-300">COLUMN_TABLE</code> are not validated granularly in this tool, because the regex's way too complicated tho.
+                                <br />For detailed column validation (ADD/MODIFY check), please use the <Link href="/oracle-object-validator/env-checker" className="text-blue-400 hover:underline font-bold">Env Checker</Link>.
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1078,8 +1087,8 @@ export default function ThreeWayComparisonPage() {
                                             : previewData.length
                                         ) / 200
                                     )
-                                            ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                                            : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
+                                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
                                         }`}
                                 >
                                     Next
