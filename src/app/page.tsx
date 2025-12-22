@@ -10,7 +10,20 @@ import ConnectionManager from "@/components/ConnectionManager";
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAiMode, setIsAiMode] = useState(false);
-  const [dependencies, setDependencies] = useState<{ oc: boolean; ai: boolean }>({ oc: true, ai: true });
+  type ToolItem = {
+    href: string;
+    title: string;
+    description: string;
+    dependency?: string;
+    platforms?: string[];
+  };
+
+  type ToolGroup = {
+    name: string;
+    items: ToolItem[];
+  };
+
+  const [dependencies, setDependencies] = useState<{ oc: boolean; ai: boolean; platform?: string }>({ oc: true, ai: true });
 
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -49,18 +62,6 @@ export default function Home() {
   }, [searchQuery, isAiMode]);
 
   // Determine which groups to display
-  type ToolItem = {
-    href: string;
-    title: string;
-    description: string;
-    dependency?: string;
-  };
-
-  type ToolGroup = {
-    name: string;
-    items: ToolItem[];
-  };
-
   let displayedGroups: ToolGroup[] = [];
 
   if (isAiMode && searchQuery.trim()) {
@@ -73,7 +74,7 @@ export default function Home() {
     }
   } else {
     // Standard Regex Mode
-    displayedGroups = toolGroups.map((group: ToolGroup) => {
+    displayedGroups = toolGroups.map((group: any) => {
       const filteredItems = group.items.filter((item: ToolItem) => {
         try {
           const regex = new RegExp(searchQuery, 'i');
@@ -186,8 +187,16 @@ export default function Home() {
                 {group.items.map((tool) => {
                   const isOcMissing = tool.dependency === 'oc' && !dependencies.oc;
                   const isAiMissing = tool.dependency === 'ai' && !dependencies.ai;
-                  const isDisabled = isOcMissing || isAiMissing;
-                  const missingLabel = isOcMissing ? "OC Binary Missing" : isAiMissing ? "AI Model Missing" : "";
+                  const isPlatformMissing = !!(tool.platforms && dependencies.platform && !tool.platforms.includes(dependencies.platform));
+
+                  const isDisabled = isOcMissing || isAiMissing || isPlatformMissing;
+                  const missingLabel = isPlatformMissing
+                    ? "OS Not Supported"
+                    : isOcMissing
+                      ? "OC Binary Missing"
+                      : isAiMissing
+                        ? "AI Model Missing"
+                        : "";
 
                   const CardContent = (
                     <button
@@ -228,7 +237,7 @@ export default function Home() {
 
                   if (isDisabled) {
                     return (
-                      <div key={tool.href} className="block w-full" title={`Required library (${tool.dependency}) is missing`}>
+                      <div key={tool.href} className="block w-full" title={`Unavailable: ${missingLabel}`}>
                         {CardContent}
                       </div>
                     );

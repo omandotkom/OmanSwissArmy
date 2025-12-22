@@ -8,6 +8,12 @@ export const toolGroups = [
                 description: "Compare directories and view file differences.",
             },
             {
+                href: "/port-manager",
+                title: "Port Manager",
+                description: "Check port usage and kill blocking processes.",
+                platforms: ["win32"],
+            },
+            {
                 href: "/diff-checker",
                 title: "Text Compare",
                 description: "Compare text files and highlight differences.",

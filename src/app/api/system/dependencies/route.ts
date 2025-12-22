@@ -22,6 +22,7 @@ export async function GET() {
         return NextResponse.json({
             oc: hasOc,
             ai: hasAi,
+            platform: process.platform,
         });
     } catch (error) {
         console.error("Error checking dependencies:", error);
