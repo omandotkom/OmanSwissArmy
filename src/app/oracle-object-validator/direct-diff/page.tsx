@@ -14,17 +14,24 @@ interface DBObject {
     owner?: string; // Optional because initial fetch might not have it, but selection will
 }
 
+interface CompileModalState {
+    sourceName: string;
+    targetName: string;
+    ddl: string;
+    direction: 'source_to_target' | 'target_to_source';
+    item: { owner: string; name: string; type: string };
+}
+
 export default function DirectObjectDiffPage() {
-    // Connection State
+    // ... State ...
     const [connections, setConnections] = useState<OracleConnection[]>([]);
     const [sourceConn, setSourceConn] = useState<OracleConnection | null>(null);
-    const [targetConns, setTargetConns] = useState<OracleConnection[]>([]); // Multi-target support
+    const [targetConns, setTargetConns] = useState<OracleConnection[]>([]);
 
-    // UI State for Connection Manager
-    const [isConnManagerOpen, setIsConnManagerOpen] = useState(false);
+    // UI selection state ...
     const [selectingFor, setSelectingFor] = useState<'SOURCE' | 'TARGET_ADD'>('SOURCE');
+    const [isConnManagerOpen, setIsConnManagerOpen] = useState(false);
 
-    // Selection State
     const [schemaList, setSchemaList] = useState<string[]>([]);
     const [selectedSchema, setSelectedSchema] = useState("");
     const [isFetchingSchemas, setIsFetchingSchemas] = useState(false);
@@ -33,25 +40,107 @@ export default function DirectObjectDiffPage() {
     const [selectedObject, setSelectedObject] = useState<DBObject | null>(null);
     const [isFetchingObjects, setIsFetchingObjects] = useState(false);
 
-    // Filter State for Comboboxes
+    // Filters
     const [schemaSearch, setSchemaSearch] = useState("");
     const [objectSearch, setObjectSearch] = useState("");
 
-    // Comparison State
     const [activeTargetIndex, setActiveTargetIndex] = useState<number>(0);
     const [diffResult, setDiffResult] = useState<{ ddl1: string, ddl2: string, status: string } | null>(null);
     const [isComparing, setIsComparing] = useState(false);
     const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
 
-    // -- NEW STATE FOR MULTI MODE --
-    const [mode, setMode] = useState<'SINGLE' | 'MULTI'>('SINGLE');
+    // Multi Mode
+    const [mode, setMode] = useState<'SINGLE' | 'MULTI'>('MULTI');
     const [multiSelection, setMultiSelection] = useState<DBObject[]>([]);
     const [batchResults, setBatchResults] = useState<any[]>([]);
-    const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null); // To track active item in batch view
+    const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
 
-    useEffect(() => {
-        getAllConnections().then(setConnections);
-    }, []);
+    // -- NEW STATE FOR COMPILE --
+    const [isCompiling, setIsCompiling] = useState(false);
+    const [compileModal, setCompileModal] = useState<CompileModalState | null>(null);
+    const [alertModal, setAlertModal] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+    // ... (useEffect hooks) ...
+
+    // ... (Existing Functions: handleConnSelect, removeTarget, runComparison, toggleMultiSelect) ...
+
+    // -- NEW FUNCTIONS FOR COMPILE --
+    const initiateCompile = (direction: 'source_to_target' | 'target_to_source') => {
+        if (!sourceConn || targetConns.length === 0 || !diffResult) return;
+        const targetConn = targetConns[activeTargetIndex];
+
+        let ddlToExec = "";
+        let itemToComp = { owner: selectedSchema, name: selectedObject?.name || "", type: selectedObject?.type || "" };
+
+        // Determine Item based on Mode
+        if (mode === 'MULTI' && selectedBatchId) {
+            // Find item in batchResults
+            const res = batchResults.find(r => `${r.item.owner}-${r.item.name}-${r.item.type}` === selectedBatchId);
+            if (res) {
+                itemToComp = res.item;
+                ddlToExec = direction === 'source_to_target'
+                    ? (res.ddl1 || "")
+                    : (res.ddl2 || "");
+            }
+        } else {
+            // Single Mode
+            ddlToExec = direction === 'source_to_target'
+                ? (diffResult.ddl1 || "")
+                : (diffResult.ddl2 || "");
+        }
+
+        if (!ddlToExec || ddlToExec.startsWith("--")) {
+            setAlertModal({ title: 'Invalid Content', message: "No valid DDL to execute.", type: 'error' });
+            return;
+        }
+
+        setCompileModal({
+            direction,
+            ddl: ddlToExec,
+            item: itemToComp,
+            sourceName: direction === 'source_to_target' ? sourceConn.name : targetConn.name,
+            targetName: direction === 'source_to_target' ? targetConn.name : sourceConn.name
+        });
+    };
+
+    const executeCompile = async () => {
+        if (!compileModal || !sourceConn || targetConns.length === 0) return;
+        setIsCompiling(true);
+        const targetConn = targetConns[activeTargetIndex];
+
+        // Identify which credential strictly executes the DDL
+        const execEnv = compileModal.direction === 'source_to_target' ? targetConn : sourceConn;
+
+        try {
+            const res = await fetch('/api/oracle/execute-ddl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetEnv: execEnv,
+                    ddl: compileModal.ddl,
+                    cType: compileModal.item.type, // Required for compilation logic
+                    cName: compileModal.item.name,
+                    cOwner: compileModal.item.owner
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setAlertModal({ title: 'Compilation Success', message: 'Object compiled successfully!', type: 'success' });
+                setCompileModal(null);
+                // Refresh Diff
+                runComparison();
+            } else {
+                setAlertModal({ title: 'Compilation Failed', message: data.error || "Unknown Error", type: 'error' });
+            }
+
+        } catch (error: any) {
+            setAlertModal({ title: 'System Error', message: error.message, type: 'error' });
+        } finally {
+            setIsCompiling(false);
+        }
+    };
+
 
     // Fetch Schemas when Source changes
     useEffect(() => {
@@ -68,9 +157,9 @@ export default function DirectObjectDiffPage() {
             .then(res => res.json())
             .then(data => {
                 if (data.schemas) setSchemaList(data.schemas);
-                else alert("Failed to fetch schemas: " + (data.error || "Unknown"));
+                else setAlertModal({ title: 'Schema Fetch Failed', message: data.error || "Unknown Error", type: 'error' });
             })
-            .catch(err => alert("Network Error: " + err.message))
+            .catch(err => setAlertModal({ title: 'Network Error', message: err.message, type: 'error' }))
             .finally(() => setIsFetchingSchemas(false));
     }, [sourceConn]);
 
@@ -89,8 +178,9 @@ export default function DirectObjectDiffPage() {
             .then(res => res.json())
             .then(data => {
                 if (data.objects) setObjectList(data.objects);
+                else setAlertModal({ title: 'Object Fetch Failed', message: data.error || "Unknown Error", type: 'error' });
             })
-            .catch(err => console.error(err))
+            .catch(err => setAlertModal({ title: 'Network Error', message: err.message, type: 'error' }))
             .finally(() => setIsFetchingObjects(false));
     }, [selectedSchema, sourceConn]);
 
@@ -538,13 +628,31 @@ export default function DirectObjectDiffPage() {
                                         language="sql"
                                         options={{ readOnly: true, renderSideBySide: true, scrollBeyondLastLine: false }}
                                     />
-                                    {/* Headers Overlay */}
-                                    <div className="absolute top-0 left-0 w-1/2 p-2 pointer-events-none z-10">
+                                    {/* Headers Overlay with Push Buttons */}
+                                    <div className="absolute top-0 left-0 w-1/2 p-2 pointer-events-none z-10 flex justify-between px-4">
+                                        <div className="pointer-events-auto">
+                                            <button
+                                                onClick={() => initiateCompile('source_to_target')}
+                                                className="bg-zinc-800/80 hover:bg-emerald-600/80 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm flex items-center gap-2 transition-all"
+                                                title="Overwrite Target with Source DDL"
+                                            >
+                                                Push to Target <ArrowLeft className="w-3 h-3 rotate-180" />
+                                            </button>
+                                        </div>
                                         <span className="bg-zinc-800/90 text-zinc-300 px-2 py-1 rounded text-xs border border-zinc-700 shadow-sm backdrop-blur">
                                             Source: {sourceConn?.name}
                                         </span>
                                     </div>
-                                    <div className="absolute top-0 right-0 w-1/2 p-2 pointer-events-none z-10 flex justify-end">
+                                    <div className="absolute top-0 right-0 w-1/2 p-2 pointer-events-none z-10 flex justify-between px-4 flex-row-reverse">
+                                        <div className="pointer-events-auto">
+                                            <button
+                                                onClick={() => initiateCompile('target_to_source')}
+                                                className="bg-zinc-800/80 hover:bg-blue-600/80 text-blue-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm flex items-center gap-2 transition-all"
+                                                title="Overwrite Source with Target DDL"
+                                            >
+                                                <ArrowLeft className="w-3 h-3" /> Push to Source
+                                            </button>
+                                        </div>
                                         <span className="bg-zinc-800/90 text-zinc-300 px-2 py-1 rounded text-xs border border-zinc-700 shadow-sm backdrop-blur">
                                             Target: {targetConns[activeTargetIndex]?.name}
                                         </span>
@@ -610,6 +718,33 @@ export default function DirectObjectDiffPage() {
                                     scrollBeyondLastLine: false,
                                 }}
                             />
+                            {/* Headers Overlay for Modal */}
+                            <div className="absolute top-0 left-0 w-1/2 p-2 pointer-events-none z-10 flex justify-between px-4">
+                                <div className="pointer-events-auto">
+                                    <button
+                                        onClick={() => initiateCompile('source_to_target')}
+                                        className="bg-zinc-800/80 hover:bg-emerald-600/80 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm flex items-center gap-2 transition-all"
+                                    >
+                                        Push to Target <ArrowLeft className="w-3 h-3 rotate-180" />
+                                    </button>
+                                </div>
+                                <span className="bg-zinc-800/90 text-zinc-300 px-2 py-1 rounded text-xs border border-zinc-700 shadow-sm backdrop-blur">
+                                    Source: {sourceConn?.name}
+                                </span>
+                            </div>
+                            <div className="absolute top-0 right-0 w-1/2 p-2 pointer-events-none z-10 flex justify-between px-4 flex-row-reverse">
+                                <div className="pointer-events-auto">
+                                    <button
+                                        onClick={() => initiateCompile('target_to_source')}
+                                        className="bg-zinc-800/80 hover:bg-blue-600/80 text-blue-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm flex items-center gap-2 transition-all"
+                                    >
+                                        <ArrowLeft className="w-3 h-3" /> Push to Source
+                                    </button>
+                                </div>
+                                <span className="bg-zinc-800/90 text-zinc-300 px-2 py-1 rounded text-xs border border-zinc-700 shadow-sm backdrop-blur">
+                                    Target: {targetConns[activeTargetIndex]?.name}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Modal Footer */}
@@ -619,6 +754,91 @@ export default function DirectObjectDiffPage() {
                                 className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded-lg font-medium transition-colors text-sm border border-zinc-700 shadow-sm"
                             >
                                 Close (Esc)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Compilation Confirmation Modal */}
+            {compileModal && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in zoom-in duration-200">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-lg p-6 shadow-2xl">
+                        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                            <Database className="w-5 h-5 text-orange-500" /> Confirm Compilation
+                        </h3>
+                        <p className="text-zinc-400 text-sm mb-6">
+                            You are about to compile/overwrite an object in the database.
+                            <br />
+                            <span className="text-red-400 font-bold block mt-2">
+                                ACTION: {compileModal.direction === 'source_to_target' ? 'PUSH TO TARGET' : 'PUSH TO SOURCE'}
+                            </span>
+                        </p>
+
+                        <div className="bg-zinc-950 p-4 rounded-lg border border-zinc-800 mb-6 text-sm font-mono space-y-2">
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">Source (Code):</span>
+                                <span className="text-emerald-400">{compileModal.sourceName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">Target (Execute):</span>
+                                <span className="text-blue-400">{compileModal.targetName}</span>
+                            </div>
+                            <div className="flex justify-between pt-2 border-t border-zinc-800">
+                                <span className="text-zinc-500">Object:</span>
+                                <span className="text-white">{compileModal.item.owner}.{compileModal.item.name} ({compileModal.item.type})</span>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setCompileModal(null)}
+                                className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeCompile}
+                                disabled={isCompiling}
+                                className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold shadow-lg shadow-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isCompiling ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                                        Compiling...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Database className="w-4 h-4" /> Confirm & Execute
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Alert Modal */}
+            {alertModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-sm p-6 shadow-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            {alertModal.type === 'success' && <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center"><CheckCircle2 className="w-6 h-6" /></div>}
+                            {alertModal.type === 'error' && <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center"><AlertCircle className="w-6 h-6" /></div>}
+                            {alertModal.type === 'info' && <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center"><AlertCircle className="w-6 h-6" /></div>}
+                            <div>
+                                <h3 className="font-bold text-white capitalize">{alertModal.title}</h3>
+                            </div>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+                            {alertModal.message}
+                        </p>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setAlertModal(null)}
+                                className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                            >
+                                OK
                             </button>
                         </div>
                     </div>
