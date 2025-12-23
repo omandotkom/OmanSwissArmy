@@ -8,6 +8,12 @@ export const toolGroups = [
                 description: "Compare directories and view file differences.",
             },
             {
+                href: "/git-conflict-detector",
+                title: "Git Conflict Detector (Beta)",
+                description: "Simulate merge and detect conflicts without merging.",
+                isNew: true,
+            },
+            {
                 href: "/port-manager",
                 title: "Port Manager",
                 description: "Check port usage and kill blocking processes.",
