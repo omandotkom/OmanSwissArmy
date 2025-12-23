@@ -17,10 +17,6 @@ Oman Swiss Army Tool adalah suite utilitas developer berbasis web (Next.js + Typ
   - Check all connections dengan status + sort (success/failed).
   - Import JSON dari SQL Developer.
   - Super Import/Export file `.conn` terenkripsi.
-- Activity tracking (opsional):
-  - Page view + click tracking via Web Worker.
-  - Dev mode hanya log ke console.
-  - Production ke Firebase Firestore (lihat `FIREBASE_SETUP.md`).
 
 ## Katalog fitur (detail)
 
@@ -260,7 +256,6 @@ Oman Swiss Army Tool adalah suite utilitas developer berbasis web (Next.js + Typ
   - AI Search: model `Xenova/all-MiniLM-L6-v2` di `public/models/Xenova/all-MiniLM-L6-v2`.
   - AI SQL Review: model Qwen2.5-Coder di `public/models/qwen25coder` (lihat `start.bat`).
 - SQLite Browser: `public/wasm/sql-wasm.wasm` (disalin dari `sql.js`).
-- Activity tracking: optional Firebase Firestore (`FIREBASE_SETUP.md`).
 
 ## Menjalankan aplikasi
 
