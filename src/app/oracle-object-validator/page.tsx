@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Database, CheckCircle, Settings } from "lucide-react";
+import { ArrowLeft, Database, CheckCircle, Settings, Search } from "lucide-react";
 
 export default function OracleObjectValidatorPage() {
     const features = [
+        {
+            href: "/oracle-object-validator/direct-diff",
+            title: "Direct Object Diff",
+            description: "Quickly compare a specific object between Source and Target(s). Inspect DDL differences instantly without Excel.",
+            icon: <Search className="h-6 w-6 text-yellow-400" />,
+        },
         {
             href: "/oracle-object-validator/env-checker",
             title: "Object DB Env Checker",

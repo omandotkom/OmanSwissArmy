@@ -80,7 +80,7 @@ set ZIP_NAME=OmanSwissArmyTool-%APP_VERSION%-beta.zip
 echo.
 echo Zipping standalone build package...
 if exist "%ZIP_NAME%" del "%ZIP_NAME%"
-tar -a -c -f "%ZIP_NAME%" -C ".next\standalone" .
+powershell -Command "Compress-Archive -Path '.next\standalone\*' -DestinationPath '%ZIP_NAME%' -Force"
 
 echo.
 echo Creating GitHub Release v%APP_VERSION%...
