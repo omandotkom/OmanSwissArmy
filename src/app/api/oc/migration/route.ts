@@ -50,6 +50,35 @@ export async function POST(request: Request) {
                 result = { message: 'Migration pod running', podName: migrationPod };
                 break;
 
+            case 'CHECK_CAPABILITIES':
+                // Check Root
+                const idCheck = await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'id', '-u']);
+                const isRoot = idCheck.trim() === '0';
+                
+                // Check Tools
+                let toolsMsg = '';
+                let strategy = '';
+                
+                try {
+                    await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'command', '-v', 'rsync']);
+                    toolsMsg += 'Rsync Available';
+                    strategy = 'RSYNC (Best)';
+                } catch {
+                    toolsMsg += 'Rsync Missing';
+                    try {
+                        await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'command', '-v', 'tar']);
+                        toolsMsg += ', Tar Available';
+                        strategy = 'TAR (Fallback)';
+                    } catch {
+                        toolsMsg += ', Tar Missing';
+                        strategy = 'NONE (Unsafe)';
+                    }
+                }
+
+                const rootMsg = isRoot ? 'Running as ROOT (✅)' : 'Running as USER (⚠️ Permission Risk)';
+                result = { message: `Pod Audit: ${rootMsg}. Tools: ${toolsMsg}.`, strategy: strategy };
+                break;
+
             case 'COPY_DATA':
                 await migrator.copyData(namespace, podName);
                 result = { message: 'Data copy completed' };
@@ -77,42 +106,48 @@ export async function POST(request: Request) {
                         throw new Error("Verification Failed: Files differ (excluding lost+found).");
                     }
                 } else {
-                    // SIZE strategy (Quick) - UPGRADED TO 'NAMING SUBSET' CHECK
+                    // SIZE strategy (Quick) - UPGRADED TO 'SIZE + PATH' CHECK
 
-                    // Use standard find (without printf) to ensure newlines are generated correctly across all shells
+                    // Use find with printf to get "SIZE__PATH" signature
+                    // %s = size in bytes, %p = path
                     const cmdListFiles = (path: string) =>
-                        `cd ${path} && find . -type f -not -path "./lost+found*" | sort`;
+                        `cd ${path} && find . -type f -not -path "./lost+found*" -printf "%s__%p\\n" | sort`;
 
                     // Fetch raw lists
                     const listOldRaw = await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', `"${cmdListFiles('/mnt/old')}"`]);
                     const listNewRaw = await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', `"${cmdListFiles('/mnt/new')}"`]);
 
-                    // Parse outputs, trim lines, remove leading "./"
+                    // Parse outputs
                     const parseFileList = (raw: string) => {
                         return raw.trim().split(/\r?\n/)
                             .map(line => line.trim())
-                            .filter(line => line)
-                            .map(line => line.startsWith('./') ? line.substring(2) : line);
+                            .filter(line => line);
                     };
 
                     const filesOld = parseFileList(listOldRaw);
                     const filesNew = parseFileList(listNewRaw);
                     const setNew = new Set(filesNew);
 
+                    // Find items in Old that are NOT in New (matching size and path)
                     const missingFiles = filesOld.filter(f => !setNew.has(f));
 
                     if (missingFiles.length > 0) {
-                        // Critical Error: Source files are missing in Target
-                        const sampleShort = missingFiles.slice(0, 3).join(', ');
-                        throw new Error(`Verification Failed: ${missingFiles.length} files missing in target! (e.g. ${sampleShort}...)`);
+                        // Critical Error: Source files are missing in Target or Size mismatch
+                        // Format is SIZE__./path/to/file
+                        const formatErr = (s: string) => {
+                            const [size, path] = s.split('__');
+                            return `${path} (${size} bytes)`;
+                        }
+                        const sampleShort = missingFiles.slice(0, 3).map(formatErr).join(', ');
+                        throw new Error(`Verification Failed: ${missingFiles.length} files missing or size mismatch! (e.g. ${sampleShort}...)`);
                     }
 
                     if (filesOld.length === filesNew.length) {
-                        result = { message: `Verification Passed: Perfect Match (${filesOld.length} files).` };
+                        result = { message: `Verification Passed: Perfect Match (${filesOld.length} files checked for size & path).` };
                     } else {
                         // Pass with warning (Target has extra files)
                         const diff = filesNew.length - filesOld.length;
-                        result = { message: `Verification Passed: All source files present. Target has ${diff} extra files (residue).` };
+                        result = { message: `Verification Passed: All source data intact. Target has ${diff} extra files (residue).` };
                     }
                 }
                 break;

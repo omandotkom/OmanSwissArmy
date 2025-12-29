@@ -141,18 +141,13 @@ export default function Home() {
             {/* AI Toggle & Status */}
             <div className="flex items-center justify-center gap-4">
               <button
-                onClick={() => !dependencies.ai ? null : setIsAiMode(!isAiMode)}
-                disabled={!dependencies.ai}
-                title={!dependencies.ai ? "AI Model libraries are not available" : ""}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border ${!dependencies.ai
-                  ? "bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed opacity-50"
-                  : isAiMode
-                    ? "bg-indigo-900/30 border-indigo-500/50 text-indigo-300"
-                    : "bg-zinc-900 border-zinc-700 text-zinc-400 hover:bg-zinc-800"
-                  }`}
+                onClick={() => {}}
+                disabled={true}
+                title="Coming Soon"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed opacity-50"
               >
                 <BrainCircuit className="h-3.5 w-3.5" />
-                {isAiMode ? "AI Search Active" : "Enable AI Search"}
+                Enable AI Search
               </button>
 
               {isAiMode && !aiReady && (
@@ -188,9 +183,15 @@ export default function Home() {
                   const isOcMissing = tool.dependency === 'oc' && !dependencies.oc;
                   const isAiMissing = tool.dependency === 'ai' && !dependencies.ai;
                   const isPlatformMissing = !!(tool.platforms && dependencies.platform && !tool.platforms.includes(dependencies.platform));
+                  const isComingSoon = tool.href === '/sql-review';
+                  const isDeployDbIssue = tool.href === '/deploy-db';
 
-                  const isDisabled = isOcMissing || isAiMissing || isPlatformMissing;
-                  const missingLabel = isPlatformMissing
+                  const isDisabled = isOcMissing || isAiMissing || isPlatformMissing || isComingSoon || isDeployDbIssue;
+                  const missingLabel = isDeployDbIssue
+                    ? "Disabled because having major issue, coming soon."
+                    : isComingSoon
+                    ? "Coming Soon"
+                    : isPlatformMissing
                     ? "OS Not Supported"
                     : isOcMissing
                       ? "OC Binary Missing"

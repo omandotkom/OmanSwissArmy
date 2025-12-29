@@ -269,7 +269,8 @@ export default function PvcMigratorPage() {
             { action: 'PREPARE_DESTINATION', label: 'Creating Destination PVC' },
             { action: 'SCALE', replicas: 0, label: 'Scaling Down Application' },
             { action: 'START_MIGRATION_POD', label: 'Starting Migration Pod' },
-            { action: 'COPY_DATA', label: 'Copying Data (rsync/cp)' },
+            { action: 'CHECK_CAPABILITIES', label: 'Auditing Pod Capabilities (Root/Rsync)' },
+            { action: 'COPY_DATA', label: 'Copying Data' },
             { action: 'VERIFY_DATA', label: `Verifying Data (${verifyMethod} Method)` },
             { action: 'SWITCH_VOLUME', label: 'Updating Deployment Configuration' },
             { action: 'SCALE', replicas: 1, label: 'Scaling Up Application' },
@@ -306,6 +307,27 @@ export default function PvcMigratorPage() {
                 });
 
                 if (!res.ok) throw new Error((await res.json()).error);
+
+                const json = await res.json();
+                
+                // If the step returned a specific audit strategy, log it explicitly
+                if (step.action === 'CHECK_CAPABILITIES' && json.strategy) {
+                     updateLastLog('success'); // Mark audit as done
+                     // Add the new line for strategy
+                     addLog(`📋 Planning migration : ${json.strategy}`, 'success');
+                } else if (json.message) {
+                    // Update the running log with the server message if provided
+                     setLogs(prev => {
+                        const newLogs = [...prev];
+                        if (newLogs.length > 0) {
+                            newLogs[newLogs.length - 1].message = json.message;
+                            newLogs[newLogs.length - 1].status = 'success';
+                        }
+                        return newLogs;
+                    });
+                } else {
+                    updateLastLog('success');
+                }
 
                 // Helper to format duration
                 const formatDuration = (ms: number) => {

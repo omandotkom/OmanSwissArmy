@@ -90,10 +90,17 @@ metadata:
 spec:
   containers:
     - name: migration
+      # IMAGE REQUIREMENT:
+      # Ideally usage of 'registry.redhat.io/rhel8/support-tools:latest' which contains 'rsync'.
+      # If 'rsync' is missing, the code will fallback to 'tar'.
+      # Ensure the image has at least 'tar' and standard POSIX shell.
       image: registry.redhat.io/rhel8/support-tools:latest
-      # Fallback image if local restriction: alpine (but needs ensuring rsync installed or use cp)
-      # Let's stick to the one in guide or user input.
       command: ["/bin/sleep", "infinity"]
+      securityContext:
+        # Run as root to ensure we can read/write files with original ownership (tar/rsync needs this)
+        # However, if cluster has strict SCC (Security Context Constraints), this might fail.
+        # For general migration, running as restricted user might fail to preserve ownership.
+        runAsUser: 0
       volumeMounts:
         - name: old-vol
           mountPath: /mnt/old
@@ -117,8 +124,27 @@ spec:
   }
 
   async copyData(namespace: string, podName: string) {
-    // Use cp -r which is universally compatible and less strict about root metadata
-    return this.runCommand(['exec', podName, `-n ${namespace}`, '--', 'cp', '-r', '/mnt/old/.', '/mnt/new/']);
+    // Smart Copy Strategy:
+    // 1. Try rsync (Best for metadata: permissions, times, ownership, symlinks)
+    // 2. Fallback to tar pipe (Good for metadata, universal availability)
+    // 3. Fail if both missing (cp -r is unsafe for migration)
+    
+    const script = `
+      if command -v rsync >/dev/null 2>&1; then
+        echo "Using rsync..."
+        rsync -avxHAX --progress /mnt/old/ /mnt/new/
+      elif command -v tar >/dev/null 2>&1; then
+        echo "rsync not found, using tar..."
+        (cd /mnt/old && tar cf - .) | (cd /mnt/new && tar xpf -)
+      else
+        echo "Error: Neither rsync nor tar is available."
+        exit 1
+      fi
+    `;
+
+    // We wrap the script in sh -c to execute logic inside the pod
+    // Note: escape double quotes for the JSON/Shell command structure
+    return this.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', script]);
   }
 
   async updateDeploymentVolume(namespace: string, deploymentName: string, volName: string, newClaimName: string) {
