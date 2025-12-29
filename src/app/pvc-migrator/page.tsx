@@ -375,7 +375,7 @@ export default function PvcMigratorPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 p-8 max-w-7xl mx-auto space-y-8 relative">
+        <div className="min-h-screen bg-slate-900 text-slate-100 p-8 space-y-8 relative">
             {/* Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -450,7 +450,7 @@ export default function PvcMigratorPage() {
             {/* STEP 1: SELECT SOURCE */}
             {step === 1 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="w-1/3">
+                    <div className="w-full max-w-2xl">
                         <label className="block text-sm font-medium mb-2">Project / Namespace</label>
                         <ProjectSelector
                             projects={projects}
