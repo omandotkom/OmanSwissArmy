@@ -4,7 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Terminal, LogOut } from 'lucide-react';
+import { UserBadge } from "@/components/UserBadge";
 
 interface PvcItem {
     name: string;
@@ -21,6 +22,13 @@ interface LogEntry {
 }
 
 export default function PvcMigratorPage() {
+    // Auth State
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [checkingLogin, setCheckingLogin] = useState(true);
+    const [loginCommand, setLoginCommand] = useState('');
+    const [loginError, setLoginError] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+
     // Global State
     const [project, setProject] = useState<string>('');
     const [projects, setProjects] = useState<string[]>([]);
@@ -50,8 +58,49 @@ export default function PvcMigratorPage() {
     const [deploymentVolumeName, setDeploymentVolumeName] = useState(''); // Need to identify volume name, might need user input or auto-detect
 
     useEffect(() => {
-        fetchProjects();
+        checkLoginStatus();
     }, []);
+
+    const checkLoginStatus = async () => {
+        setCheckingLogin(true);
+        try {
+            const res = await fetch('/api/oc/projects');
+            if (res.ok) {
+                setIsLoggedIn(true);
+                fetchProjects();
+            } else {
+                setIsLoggedIn(false);
+            }
+        } catch (e) {
+            setIsLoggedIn(false);
+        } finally {
+            setCheckingLogin(false);
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoginError('');
+        setIsLoggingIn(true);
+        try {
+            const res = await fetch('/api/oc/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: loginCommand })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setIsLoggedIn(true);
+                fetchProjects();
+            } else {
+                setLoginError(data.error);
+            }
+        } catch (err) {
+            setLoginError('Server error');
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
 
     const fetchProjects = async () => {
         setLoadingProjects(true);
@@ -289,8 +338,44 @@ export default function PvcMigratorPage() {
         }
     };
 
+    if (checkingLogin) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">Loading...</div>;
+
+    if (!isLoggedIn) {
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-8">
+                <div className="w-full max-w-md space-y-8">
+                    <div className="text-center">
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent mb-2">OpenShift Login</h1>
+                        <p className="text-slate-400">Paste your login command from OpenShift Web Console</p>
+                    </div>
+                    <form onSubmit={handleLogin} className="bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Login Command</label>
+                            <textarea
+                                value={loginCommand}
+                                onChange={(e) => setLoginCommand(e.target.value)}
+                                placeholder="oc login --token=... --server=..."
+                                className="w-full h-32 bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-300 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                required
+                            />
+                            <p className="text-xs text-slate-500">Copy command ini dari menu "Copy Login Command" di OpenShift Console Anda.</p>
+                        </div>
+                        {loginError && <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">{loginError}</div>}
+                        <button type="submit" disabled={isLoggingIn} className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                            {isLoggingIn ? <RefreshCw className="animate-spin" size={20} /> : <Terminal size={20} />}
+                            {isLoggingIn ? 'Connecting...' : 'Connect to Cluster'}
+                        </button>
+                        <div className="flex justify-center">
+                            <Link href="/" className="text-slate-500 hover:text-slate-300 text-sm">Back to Home</Link>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8 relative">
+        <div className="min-h-screen bg-slate-900 text-slate-100 p-8 max-w-7xl mx-auto space-y-8 relative">
             {/* Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -330,13 +415,21 @@ export default function PvcMigratorPage() {
                 </div>
             )}
 
-            <div className="flex items-center gap-4">
-                <Link href="/" className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
-                    <ArrowLeft size={20} />
-                </Link>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
-                    OpenShift PVC Migration Wizard
-                </h1>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Link href="/" className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
+                        <ArrowLeft size={20} />
+                    </Link>
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
+                        OpenShift PVC Migration Wizard
+                    </h1>
+                </div>
+                <div className="flex items-center gap-4">
+                    <UserBadge />
+                    <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
+                        <LogOut size={16} /> Disconnect
+                    </button>
+                </div>
             </div>
 
             {/* Step Indicator */}
