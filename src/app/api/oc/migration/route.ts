@@ -54,11 +54,11 @@ export async function POST(request: Request) {
                 // Check Root
                 const idCheck = await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'id', '-u']);
                 const isRoot = idCheck.trim() === '0';
-                
+
                 // Check Tools
                 let toolsMsg = '';
                 let strategy = '';
-                
+
                 try {
                     await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'command', '-v', 'rsync']);
                     toolsMsg += 'Rsync Available';
@@ -66,16 +66,16 @@ export async function POST(request: Request) {
                 } catch {
                     toolsMsg += 'Rsync Missing';
                     try {
-                        await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'command', '-v', 'tar']);
-                        toolsMsg += ', Tar Available';
-                        strategy = 'TAR (Fallback)';
+                        await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'command', '-v', 'cp']);
+                        toolsMsg += ', CP Available';
+                        strategy = 'CP (Safe Fallback)';
                     } catch {
-                        toolsMsg += ', Tar Missing';
+                        toolsMsg += ', CP Missing';
                         strategy = 'NONE (Unsafe)';
                     }
                 }
 
-                const rootMsg = isRoot ? 'Running as ROOT (✅)' : 'Running as USER (⚠️ Permission Risk)';
+                const rootMsg = isRoot ? 'Running as ROOT (✅ Privileged)' : `Running as USER ${idCheck.trim()} (✅ Secure/Default)`;
                 result = { message: `Pod Audit: ${rootMsg}. Tools: ${toolsMsg}.`, strategy: strategy };
                 break;
 
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
                     // Use find with printf to get "SIZE__PATH" signature
                     // %s = size in bytes, %p = path
                     const cmdListFiles = (path: string) =>
-                        `cd ${path} && find . -type f -not -path "./lost+found*" -printf "%s__%p\\n" | sort`;
+                        `cd ${path} && find . -type f -not -path "./lost+found*" -printf '%s__%p\\n' | sort`;
 
                     // Fetch raw lists
                     const listOldRaw = await migrator.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', `"${cmdListFiles('/mnt/old')}"`]);

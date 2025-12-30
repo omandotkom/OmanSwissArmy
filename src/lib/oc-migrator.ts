@@ -96,11 +96,8 @@ spec:
       # Ensure the image has at least 'tar' and standard POSIX shell.
       image: registry.redhat.io/rhel8/support-tools:latest
       command: ["/bin/sleep", "infinity"]
-      securityContext:
-        # Run as root to ensure we can read/write files with original ownership (tar/rsync needs this)
-        # However, if cluster has strict SCC (Security Context Constraints), this might fail.
-        # For general migration, running as restricted user might fail to preserve ownership.
-        runAsUser: 0
+      # securityContext:
+        #   runAsUser: 0 # Removed to support restricted SCC (OpenShift default)
       volumeMounts:
         - name: old-vol
           mountPath: /mnt/old
@@ -128,23 +125,17 @@ spec:
     // 1. Try rsync (Best for metadata: permissions, times, ownership, symlinks)
     // 2. Fallback to tar pipe (Good for metadata, universal availability)
     // 3. Fail if both missing (cp -r is unsafe for migration)
-    
-    const script = `
-      if command -v rsync >/dev/null 2>&1; then
-        echo "Using rsync..."
-        rsync -avxHAX --progress /mnt/old/ /mnt/new/
-      elif command -v tar >/dev/null 2>&1; then
-        echo "rsync not found, using tar..."
-        (cd /mnt/old && tar cf - .) | (cd /mnt/new && tar xpf -)
-      else
-        echo "Error: Neither rsync nor tar is available."
-        exit 1
-      fi
-    `;
+
+    // We flatten the script to a single line and escape quotes to avoid issues with 'sh -c' and Windows argument parsing
+    // MODIFIED: Rsync uses -rlDvx (no perms 'p', no times 't', no owner 'o', no group 'g'). Fallback to 'cp -r' which is safer than tar for non-root permission issues.
+    const script = 'if command -v rsync >/dev/null 2>&1; then echo "Using rsync..."; rsync -rlDvx --progress /mnt/old/ /mnt/new/; else echo "rsync not found, using cp..."; cp -r /mnt/old/. /mnt/new/; fi';
+
+    // Escape double quotes for the outer shell wrapper
+    const safeScript = script.replace(/"/g, '\\"');
 
     // We wrap the script in sh -c to execute logic inside the pod
     // Note: escape double quotes for the JSON/Shell command structure
-    return this.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', script]);
+    return this.runCommand(['exec', podName, `-n ${namespace}`, '--', 'sh', '-c', `"${safeScript}"`]);
   }
 
   async updateDeploymentVolume(namespace: string, deploymentName: string, volName: string, newClaimName: string) {
