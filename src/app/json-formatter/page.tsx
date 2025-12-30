@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import Editor, { OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
+import { trackActivity } from "@/lib/tracker";
 
 export default function JsonFormatter() {
     const [jsonInput, setJsonInput] = useState("");
@@ -24,6 +25,7 @@ export default function JsonFormatter() {
             const formatted = JSON.stringify(parsed, null, 2);
             setJsonInput(formatted);
             setError(null);
+            trackActivity({ action: "FORMAT_JSON", details: { length: jsonInput.length } });
         } catch (err) {
             const error = err as Error;
             setError(error.message);
@@ -36,6 +38,7 @@ export default function JsonFormatter() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">JSON Formatter</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "JSON Formatter" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

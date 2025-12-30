@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Search, Sparkles, BrainCircuit, Loader2, AlertTriangle, Settings, X, Database, Bot, FileUp, RefreshCcw, Info, Heart } from "lucide-react";
 import { toolGroups } from "@/data/tools";
 import { useAiSearch } from "@/hooks/useAiSearch";
+import { trackActivity } from "@/lib/tracker";
 import ConnectionManager from "@/components/ConnectionManager";
 
 export default function Home() {
@@ -100,7 +101,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-start bg-zinc-950 p-6 font-sans text-zinc-100 relative">
       <div className="absolute top-6 right-6 z-10">
         <button
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={() => { setIsSettingsOpen(true); trackActivity({ action: "OPEN_SETTINGS", label: "Homepage Settings Icon" }); }}
           className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full transition-all"
           title="Settings"
         >
@@ -141,7 +142,7 @@ export default function Home() {
             {/* AI Toggle & Status */}
             <div className="flex items-center justify-center gap-4">
               <button
-                onClick={() => {}}
+                onClick={() => { }}
                 disabled={true}
                 title="Coming Soon"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed opacity-50"
@@ -190,14 +191,14 @@ export default function Home() {
                   const missingLabel = isDeployDbIssue
                     ? "Disabled because having major issue, coming soon."
                     : isComingSoon
-                    ? "Coming Soon"
-                    : isPlatformMissing
-                    ? "OS Not Supported"
-                    : isOcMissing
-                      ? "OC Binary Missing"
-                      : isAiMissing
-                        ? "AI Model Missing"
-                        : "";
+                      ? "Coming Soon"
+                      : isPlatformMissing
+                        ? "OS Not Supported"
+                        : isOcMissing
+                          ? "OC Binary Missing"
+                          : isAiMissing
+                            ? "AI Model Missing"
+                            : "";
 
                   const CardContent = (
                     <button
@@ -245,7 +246,12 @@ export default function Home() {
                   }
 
                   return (
-                    <Link key={tool.href} href={tool.href} className="block w-full">
+                    <Link
+                      key={tool.href}
+                      href={tool.href}
+                      className="block w-full"
+                      onClick={() => trackActivity({ action: "CLICK_TOOL", label: tool.title, details: { href: tool.href } })}
+                    >
                       {CardContent}
                     </Link>
                   );
@@ -272,7 +278,7 @@ export default function Home() {
                   Services
                 </div>
                 <button
-                  onClick={() => setActiveSetting("connection-manager")}
+                  onClick={() => { setActiveSetting("connection-manager"); trackActivity({ action: "CLICK_SETTING_TAB", label: "Connection Manager" }); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "connection-manager"
                     ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
@@ -282,7 +288,7 @@ export default function Home() {
                   Oracle Connections
                 </button>
                 <button
-                  onClick={() => setActiveSetting("ai-models")}
+                  onClick={() => { setActiveSetting("ai-models"); trackActivity({ action: "CLICK_SETTING_TAB", label: "AI Models" }); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "ai-models"
                     ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
@@ -296,7 +302,7 @@ export default function Home() {
                   System
                 </div>
                 <button
-                  onClick={() => setActiveSetting("export")}
+                  onClick={() => { setActiveSetting("export"); trackActivity({ action: "CLICK_SETTING_TAB", label: "Export" }); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "export"
                     ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
@@ -306,7 +312,7 @@ export default function Home() {
                   Export
                 </button>
                 <button
-                  onClick={() => setActiveSetting("update")}
+                  onClick={() => { setActiveSetting("update"); trackActivity({ action: "CLICK_SETTING_TAB", label: "Update" }); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "update"
                     ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"
@@ -316,7 +322,7 @@ export default function Home() {
                   Update
                 </button>
                 <button
-                  onClick={() => setActiveSetting("about")}
+                  onClick={() => { setActiveSetting("about"); trackActivity({ action: "CLICK_SETTING_TAB", label: "About" }); }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${activeSetting === "about"
                     ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-transparent"

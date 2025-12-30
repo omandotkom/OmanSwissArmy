@@ -11,6 +11,7 @@ import {
     deleteGiteaConnection
 } from "@/services/connection-storage";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { trackActivity } from "@/lib/tracker";
 
 interface UnifiedRepo {
     id: number;

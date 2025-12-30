@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function TimestampConverter() {
     const [now, setNow] = useState(0);
@@ -35,7 +36,7 @@ export default function TimestampConverter() {
     useEffect(() => {
         const initialNow = Math.floor(Date.now() / 1000);
         setNow(initialNow);
-        
+
         const initialTs = initialNow.toString();
         setTimestamp(initialTs);
         const date = new Date(initialNow * 1000);
@@ -47,7 +48,7 @@ export default function TimestampConverter() {
         const interval = setInterval(() => {
             setNow(Math.floor(Date.now() / 1000));
         }, 1000);
-        
+
         return () => clearInterval(interval);
     }, []);
 
@@ -61,6 +62,7 @@ export default function TimestampConverter() {
                 setTimestamp(ts.toString());
             }
         }
+        trackActivity({ action: "TOGGLE_TIMESTAMP_FORMAT", label: newFormat });
     };
 
     return (
@@ -69,6 +71,7 @@ export default function TimestampConverter() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Unix Timestamp Converter</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Timestamp Converter" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home
@@ -128,6 +131,6 @@ export default function TimestampConverter() {
                 </div>
 
             </div>
-        </div>
+        </div >
     );
 }

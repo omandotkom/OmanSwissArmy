@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function CronGenerator() {
     const [cron, setCron] = useState("* * * * *");
@@ -19,6 +20,7 @@ export default function CronGenerator() {
 
     const handleChange = (field: keyof typeof schedule, value: string) => {
         setSchedule(prev => ({ ...prev, [field]: value }));
+        trackActivity({ action: "CRON_CHANGE", label: field, details: { value } });
     };
 
     return (
@@ -27,6 +29,7 @@ export default function CronGenerator() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Cron Expression Generator</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Cron Generator" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

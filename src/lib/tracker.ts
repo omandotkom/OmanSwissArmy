@@ -31,25 +31,29 @@ const getWorker = () => {
  * 100% Non-Blocking UI & Offline Support
  */
 export const trackActivity = (log: ActivityLogInput) => {
-    const worker = getWorker();
-    if (!worker) return;
+    try {
+        const worker = getWorker();
+        if (!worker) return;
 
-    // Ambil info browser di Main Thread (Worker tidak bisa akses DOM/Window)
-    const userAgent = navigator.userAgent;
-    const screenResolution = `${window.screen.width}x${window.screen.height}`;
-    const currentPath = window.location.pathname;
+        // Ambil info browser di Main Thread (Worker tidak bisa akses DOM/Window)
+        const userAgent = navigator.userAgent;
+        const screenResolution = `${window.screen.width}x${window.screen.height}`;
+        const currentPath = window.location.pathname;
 
-    // Kirim paket ke kurir (Worker)
-    worker.postMessage({
-        type: 'TRACK',
-        payload: {
-            ...log,
-            userAgent,
-            screen: screenResolution,
-            path: currentPath,
-            appVersion: "1.0.0"
-        }
-    });
+        // Kirim paket ke kurir (Worker)
+        worker.postMessage({
+            type: 'TRACK',
+            payload: {
+                ...log,
+                userAgent,
+                screen: screenResolution,
+                path: currentPath,
+                appVersion: "1.0.0"
+            }
+        });
+    } catch (e) {
+        // Silent
+    }
 };
 
 /**
@@ -73,6 +77,5 @@ export const initTrackerUser = async () => {
         }
     } catch (e) {
         // Silent fail is fine, default will be used
-        console.error("Failed to fetch user info", e);
     }
 };

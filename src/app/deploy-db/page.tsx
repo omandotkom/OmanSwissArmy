@@ -6,6 +6,7 @@ import { ArrowLeft, Upload, FileSpreadsheet, Database, ArrowRight, Settings2 } f
 import * as XLSX from "xlsx";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection } from "@/services/connection-storage";
+import { trackActivity } from "@/lib/tracker";
 
 interface ExcelRow {
     [key: string]: any;
@@ -60,6 +61,7 @@ export default function DeployOracleDB() {
         setSelectingForOwner(null);
         setSelectingForType(null);
         setIsConnManagerOpen(false);
+        trackActivity({ action: "DEPLOY_DB_CONN_SELECT", label: conn.name, details: { type: selectingForType, owner: selectingForOwner } });
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,6 +133,7 @@ export default function DeployOracleDB() {
             }
         };
         reader.readAsBinaryString(uploadedFile);
+        trackActivity({ action: "DEPLOY_DB_UPLOAD_FILE", label: uploadedFile.name });
     };
 
     // Filter & Selection Handlers
@@ -139,6 +142,7 @@ export default function DeployOracleDB() {
             ...prev,
             [`${sheets[activeTab].name}-${header}`]: value,
         }));
+        if (value) trackActivity({ action: "DEPLOY_DB_FILTER", label: header, details: { value } });
     };
 
     const getFilteredData = () => {
@@ -219,7 +223,7 @@ export default function DeployOracleDB() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center">
-                        <Link href="/" className="mr-4 p-2 rounded-full hover:bg-zinc-800 transition-colors">
+                        <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Deploy DB" })} className="mr-4 p-2 rounded-full hover:bg-zinc-800 transition-colors">
                             <ArrowLeft className="w-6 h-6" />
                         </Link>
                         <h1 className="text-3xl font-light tracking-wide">Deploy Oracle Object DB</h1>
@@ -303,8 +307,8 @@ export default function DeployOracleDB() {
                                         <button
                                             onClick={() => openConnManager(owner, "source")}
                                             className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.source
-                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
-                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
                                                 }`}
                                         >
                                             <div className="truncate flex flex-col">
@@ -322,8 +326,8 @@ export default function DeployOracleDB() {
                                         <button
                                             onClick={() => openConnManager(owner, "target")}
                                             className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-all flex justify-between items-center group ${ownerMappings[owner]?.target
-                                                    ? "bg-zinc-900 border-zinc-700 text-zinc-200"
-                                                    : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                                                ? "bg-zinc-900 border-zinc-700 text-zinc-200"
+                                                : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700"
                                                 }`}
                                         >
                                             <div className="truncate flex flex-col">
@@ -359,8 +363,8 @@ export default function DeployOracleDB() {
                                     key={sheet.name}
                                     onClick={() => setActiveTab(idx)}
                                     className={`px-6 py-3 text-sm font-medium whitespace-nowrap transition-colors ${activeTab === idx
-                                            ? "bg-zinc-800 text-white border-b-2 border-blue-500"
-                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                                        ? "bg-zinc-800 text-white border-b-2 border-blue-500"
+                                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
                                         }`}
                                 >
                                     {sheet.name} <span className="ml-2 bg-zinc-700 text-xs px-2 py-0.5 rounded-full text-zinc-300">{sheet.data.length}</span>
@@ -443,7 +447,7 @@ export default function DeployOracleDB() {
                 {/* Deploy Button (Floating) */}
                 {!isLoading && isReadyToDeploy && (
                     <div className="fixed bottom-8 right-8 z-40 animate-in zoom-in duration-300">
-                        <button className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-green-900/40 flex items-center gap-3 transition-transform hover:scale-105 active:scale-95">
+                        <button onClick={() => trackActivity({ action: "DEPLOY_DB_START", details: { ownerCount: detectedOwners.length } })} className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-green-900/40 flex items-center gap-3 transition-transform hover:scale-105 active:scale-95">
                             <Database className="w-5 h-5" />
                             START DEPLOYMENT
                         </button>

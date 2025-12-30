@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function Base64Tool() {
     const [input, setInput] = useState("");
@@ -34,6 +35,7 @@ export default function Base64Tool() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Base64 Converter</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Base64" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home
@@ -45,14 +47,14 @@ export default function Base64Tool() {
                 <div className="flex justify-center">
                     <div className="flex items-center gap-4 rounded-lg bg-zinc-900/50 p-2 border border-zinc-800/50">
                         <button
-                            onClick={() => { setMode("encode"); handleConvert(input, "encode"); }}
+                            onClick={() => { setMode("encode"); handleConvert(input, "encode"); trackActivity({ action: "BASE64_ENCODE" }); }}
                             className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${mode === "encode" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
                                 }`}
                         >
                             Encode
                         </button>
                         <button
-                            onClick={() => { setMode("decode"); handleConvert(input, "decode"); }}
+                            onClick={() => { setMode("decode"); handleConvert(input, "decode"); trackActivity({ action: "BASE64_DECODE" }); }}
                             className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${mode === "decode" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
                                 }`}
                         >

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import type { SVGProps } from "react";
 import Link from "next/link";
 import { DiffEditor } from "@monaco-editor/react";
+import { trackActivity } from "@/lib/tracker";
 
 const ArrowLeft = (props: SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
@@ -78,6 +79,7 @@ export default function DiffChecker() {
                 <div className="flex items-center gap-4">
                     <Link
                         href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "Diff Checker" })}
                         className="flex items-center justify-center rounded-full p-2 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
                     >
                         <ArrowLeft className="h-5 w-5" />
@@ -90,7 +92,10 @@ export default function DiffChecker() {
                         <Code2 className="h-4 w-4 text-zinc-500" />
                         <select
                             value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
+                            onChange={(e) => {
+                                setLanguage(e.target.value);
+                                trackActivity({ action: "DIFF_LANGUAGE_CHANGE", label: e.target.value });
+                            }}
                             className="bg-transparent text-sm font-medium text-zinc-400 outline-none transition-colors hover:text-zinc-200"
                         >
                             {LANGUAGES.map((lang) => (
@@ -104,7 +109,10 @@ export default function DiffChecker() {
 
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setInlineDiff(!inlineDiff)}
+                        onClick={() => {
+                            setInlineDiff(!inlineDiff);
+                            trackActivity({ action: "DIFF_VIEW_TOGGLE", label: !inlineDiff ? "inline" : "split" });
+                        }}
                         className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white"
                         title={inlineDiff ? "Switch to Split View" : "Switch to Inline View"}
                     >

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Editor from "@monaco-editor/react";
 import { useToast, ToastContainer } from "@/components/ui/toast";
+import { trackActivity } from "@/lib/tracker";
 
 type Language = "typescript" | "go" | "java";
 
@@ -149,6 +150,7 @@ export default function JsonToCode() {
             else if (lang === "go") generated = generateGo(parsed);
             else if (lang === "java") generated = generateJava(parsed);
             setCode(generated);
+            trackActivity({ action: "JSON_TO_CODE_CONVERT", label: lang });
         } catch (e) {
             const error = e as Error;
             setError("Invalid JSON: " + error.message);
@@ -160,6 +162,7 @@ export default function JsonToCode() {
         if (!text) return;
         navigator.clipboard.writeText(text);
         addToast("Copied to clipboard!", "success");
+        trackActivity({ action: "COPY_CODE_RESULT", label: `Length: ${text.length}` });
     };
 
     return (
@@ -169,6 +172,7 @@ export default function JsonToCode() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">JSON to Code</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "JSON to Code" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

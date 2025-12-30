@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Database, CheckCircle2, Play, Table as TableIcon, Settings2, RefreshCw, X, Search, ChevronRight, ArrowRightLeft, Loader2 } from "lucide-react";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
 import ConnectionManager from "@/components/ConnectionManager";
+import { trackActivity } from "@/lib/tracker";
 
 interface TableInfo {
     name: string;
@@ -101,6 +102,7 @@ function EnvDataCheckerContent() {
             setTargetConnId(conn.id);
         }
         setIsConnManagerOpen(false);
+        trackActivity({ action: "ENV_DATA_CHECKER_SELECT_CONN", label: conn.name, details: { type: selectingConnType } });
     };
 
     const handleFetchTables = async () => {
@@ -158,6 +160,11 @@ function EnvDataCheckerContent() {
 
             // 2. Fetch Tables
             setIsLoadingTables(true);
+            trackActivity({
+                action: 'ENV_DATA_CHECKER_FETCH_TABLES',
+                label: 'Fetch Tables',
+                details: `Source: ${sourceConn.name}`
+            });
             const res = await fetch('/api/oracle/list-objects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -177,6 +184,9 @@ function EnvDataCheckerContent() {
             setConnectionCheckStatus(prev => prev?.map(c => ({ ...c, status: 'error', message: "Unexpected Error" })) || null);
         } finally {
             setIsLoadingTables(false);
+            if (availableTables.length > 0) {
+                trackActivity({ action: "ENV_DATA_CHECKER_FETCH_TABLES_SUCCESS", label: sourceConn.name, details: { count: availableTables.length } });
+            }
         }
     };
 
@@ -217,6 +227,7 @@ function EnvDataCheckerContent() {
                 // Default select all
                 const allCols = new Set<string>(data.columns.map((c: { name: string }) => c.name));
                 setSelectedColumns(prev => new Map(prev).set(tableName, allCols));
+                trackActivity({ action: "ENV_DATA_CHECKER_FETCH_COLUMNS", label: tableName, details: { count: data.columns?.length || 0 } });
             }
         } catch (e) {
             console.error(e);
@@ -239,6 +250,12 @@ function EnvDataCheckerContent() {
         setIsComparing(true);
         setResults(new Map());
         setShowResults(true);
+
+        trackActivity({
+            action: 'ENV_DATA_CHECKER_COMPARE_START',
+            label: 'Start Comparison',
+            details: `Tables: ${selectedTables.size} | Source: ${sourceConn.name} | Target: ${targetConn.name}`
+        });
 
         const tables = Array.from(selectedTables);
 
@@ -294,6 +311,8 @@ function EnvDataCheckerContent() {
             }));
         }
         setIsComparing(false);
+        const successCount = Array.from(results.values()).filter(r => r.status === 'MATCH').length;
+        trackActivity({ action: "ENV_DATA_CHECKER_COMPARE_COMPLETE", label: `${sourceConn.name} vs ${targetConn.name}`, details: { tablesCompared: selectedTables.size, matches: successCount } });
     };
 
     const filteredTables = availableTables.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -303,7 +322,7 @@ function EnvDataCheckerContent() {
             <div className="max-w-7xl mx-auto h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
-                    <Link href="/oracle-object-validator" className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+                    <Link href="/oracle-object-validator" onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Env Data Checker' })} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
                         <ArrowLeft className="w-6 h-6" />
                     </Link>
                     <div>
@@ -600,7 +619,14 @@ function EnvDataCheckerContent() {
                                                 <td className="p-3">
                                                     {res.status === 'DIFF' ? (
                                                         <button
-                                                            onClick={() => setViewingDiff({ table: tbl, result: res })}
+                                                            onClick={() => {
+                                                                setViewingDiff({ table: tbl, result: res });
+                                                                trackActivity({
+                                                                    action: 'ENV_DATA_CHECKER_VIEW_DIFF',
+                                                                    label: `View Diff ${tbl}`,
+                                                                    details: `Source Only: ${res.stats.sourceOnlyCount} | Target Only: ${res.stats.targetOnlyCount}`
+                                                                });
+                                                            }}
                                                             className="px-3 py-1 rounded-full text-xs font-bold bg-orange-900/30 text-orange-400 border border-orange-500/30 hover:bg-orange-500 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
                                                         >
                                                             DIFF <Search className="w-3 h-3" />

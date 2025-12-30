@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { trackActivity } from "@/lib/tracker";
 
 export default function ImageConverter() {
     const [image, setImage] = useState<string | null>(null);
@@ -18,6 +19,7 @@ export default function ImageConverter() {
             reader.onload = (event) => {
                 setImage(event.target?.result as string);
                 setConvertedImage(null); // Reset converted image
+                trackActivity({ action: "IMAGE_UPLOAD", details: { size: file.size, type: file.type } });
             };
             reader.readAsDataURL(file);
         }
@@ -39,6 +41,7 @@ export default function ImageConverter() {
                 setConvertedImage(dataUrl);
             }
         };
+        trackActivity({ action: "IMAGE_CONVERT", details: { format, quality } });
     };
 
     const downloadImage = () => {
@@ -49,6 +52,7 @@ export default function ImageConverter() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        trackActivity({ action: "IMAGE_DOWNLOAD", label: format });
     };
 
     return (
@@ -57,6 +61,7 @@ export default function ImageConverter() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Image Converter</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Image Converter" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

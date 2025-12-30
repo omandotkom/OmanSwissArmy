@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Database, Search, ArrowRightLeft, AlertCircle, CheckCircle2, X, Plus, Layers, MousePointer2, Minus, Play, Trash2 } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
+import { trackActivity } from "@/lib/tracker";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
 
@@ -66,6 +67,11 @@ export default function DirectObjectDiffPage() {
 
     // -- NEW FUNCTIONS FOR COMPILE --
     const initiateCompile = (direction: 'source_to_target' | 'target_to_source') => {
+        trackActivity({
+            action: 'DIRECT_DIFF_COMPILE_INIT',
+            label: `Init Compile ${direction}`,
+            details: `Mode: ${mode}`
+        });
         if (!sourceConn || targetConns.length === 0 || !diffResult) return;
         const targetConn = targetConns[activeTargetIndex];
 
@@ -126,20 +132,36 @@ export default function DirectObjectDiffPage() {
             const data = await res.json();
 
             if (res.ok) {
+                trackActivity({
+                    action: 'DIRECT_DIFF_COMPILE_SUCCESS',
+                    label: `Compiled ${compileModal.item.name} (${compileModal.item.type})`,
+                    details: `${compileModal.direction} | Target: ${execEnv.name}`
+                });
                 setAlertModal({ title: 'Compilation Success', message: 'Object compiled successfully!', type: 'success' });
                 setCompileModal(null);
                 // Refresh Diff
                 runComparison();
             } else {
+                trackActivity({
+                    action: 'DIRECT_DIFF_COMPILE_FAILED',
+                    label: compileModal.item.name,
+                    details: `Error: ${data.error}`
+                });
                 setAlertModal({ title: 'Compilation Failed', message: data.error || "Unknown Error", type: 'error' });
             }
 
         } catch (error: any) {
+            trackActivity({
+                action: 'DIRECT_DIFF_COMPILE_FAILED',
+                label: compileModal.item.name,
+                details: `System Error: ${error.message}`
+            });
             setAlertModal({ title: 'System Error', message: error.message, type: 'error' });
         } finally {
             setIsCompiling(false);
         }
     };
+
 
 
     // Fetch Schemas when Source changes
@@ -212,6 +234,12 @@ export default function DirectObjectDiffPage() {
 
     const runComparison = useCallback(async () => {
         if (!sourceConn || targetConns.length === 0) return;
+
+        trackActivity({
+            action: 'DIRECT_DIFF_COMPARE_START',
+            label: mode === 'SINGLE' ? 'Single Object Compare' : 'Multi Object Compare',
+            details: `Source: ${sourceConn.name} | Targets: ${targetConns.length}`
+        });
 
         // Single Mode Checks
         if (mode === 'SINGLE' && (!selectedSchema || !selectedObject)) return;
@@ -323,7 +351,7 @@ export default function DirectObjectDiffPage() {
             {/* Header */}
             <header className="shrink-0 border-b border-zinc-800 bg-zinc-950 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <Link href="/oracle-object-validator" className="text-zinc-400 hover:text-white transition-colors">
+                    <Link href="/oracle-object-validator" onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Direct Diff' })} className="text-zinc-400 hover:text-white transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <h1 className="text-lg font-bold flex items-center gap-2">
@@ -437,13 +465,19 @@ export default function DirectObjectDiffPage() {
                             {/* Mode Tabs */}
                             <div className="flex border-b border-zinc-800 mb-2 relative">
                                 <button
-                                    onClick={() => setMode('SINGLE')}
+                                    onClick={() => {
+                                        setMode('SINGLE');
+                                        trackActivity({ action: 'DIRECT_DIFF_MODE_SELECT', label: 'Single Mode' });
+                                    }}
                                     className={`flex-1 pb-2 text-xs font-bold uppercase flex justify-center items-center gap-2 transition-all ${mode === 'SINGLE' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 >
                                     <MousePointer2 className="w-3 h-3" /> Single
                                 </button>
                                 <button
-                                    onClick={() => setMode('MULTI')}
+                                    onClick={() => {
+                                        setMode('MULTI');
+                                        trackActivity({ action: 'DIRECT_DIFF_MODE_SELECT', label: 'Multi Mode' });
+                                    }}
                                     className={`flex-1 pb-2 text-xs font-bold uppercase flex justify-center items-center gap-2 transition-all ${mode === 'MULTI' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 >
                                     <Layers className="w-3 h-3" /> Multiple
@@ -567,6 +601,12 @@ export default function DirectObjectDiffPage() {
                                     <div
                                         key={idx}
                                         onClick={() => {
+                                            trackActivity({
+                                                action: 'DIRECT_DIFF_MULTI_VIEW_DIFF',
+                                                label: `View Diff ${res.item.name}`,
+                                                details: `Status: ${res.status} | Type: ${res.item.type}`
+                                            });
+
                                             setDiffResult({
                                                 ddl1: res.ddl1 || '-- Source Object Empty/Missing',
                                                 ddl2: res.ddl2 || '-- Target Object Empty/Missing',

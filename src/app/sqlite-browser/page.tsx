@@ -7,6 +7,7 @@ import {
     ArrowLeft, Save, Lock, X
 } from 'lucide-react';
 import Link from 'next/link';
+import { trackActivity } from "@/lib/tracker";
 
 // Kita import type-nya saja jika memungkinkan
 // import initSqlJs from 'sql.js'; 
@@ -135,6 +136,7 @@ export default function SQLiteBrowserPage() {
                     setIsDbLoaded(true);
                     loadTables(newDb);
                     setIsLoading(false);
+                    trackActivity({ action: "SQLITE_OPEN_DB", label: file.name, details: { mode: 'WASM' } });
                 } catch (innerErr: any) {
                     console.error("Client-side Load Error:", innerErr);
 
@@ -155,6 +157,7 @@ export default function SQLiteBrowserPage() {
         } catch (err: any) {
             setError(err.message);
             setIsLoading(false);
+            trackActivity({ action: "SQLITE_OPEN_FAILED", label: file.name, details: { error: err.message } });
         }
     };
 
@@ -184,8 +187,10 @@ export default function SQLiteBrowserPage() {
                 setTables((data.tables || []).map((t: any) => ({ ...t, expanded: false, columns: [] })));
                 setShowPwModal(false);
                 setQuery('SELECT * FROM sqlite_master WHERE type="table";');
+                trackActivity({ action: "SQLITE_UNLOCK_SUCCESS", label: "Encrypted DB Unlocked" });
             } else {
                 setPwError(data.error || 'Invalid Password');
+                trackActivity({ action: "SQLITE_UNLOCK_FAILED", label: "Invalid Password" });
             }
         } catch (e: any) {
             setPwError(e.message || 'Network Error');
@@ -313,7 +318,12 @@ export default function SQLiteBrowserPage() {
             } catch (err: any) {
                 setError(err.message);
                 setResult(null);
+                trackActivity({ action: "SQLITE_QUERY_FAILED", label: "Local Error", details: { error: err.message } });
             }
+        }
+        if (sql !== 'SELECT * FROM sqlite_master WHERE type="table";') {
+            // Only track user queries, skip init query
+            trackActivity({ action: "SQLITE_RUN_QUERY", label: "User Query", details: { time: performance.now() - startTime } });
         }
     };
 
@@ -346,6 +356,7 @@ export default function SQLiteBrowserPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        trackActivity({ action: "SQLITE_EXPORT_RESULT", label: "CSV Download", details: { rows: result.values.length } });
     };
 
     const handleExportDB = () => {
@@ -361,6 +372,7 @@ export default function SQLiteBrowserPage() {
         a.href = url;
         a.download = fileName || "database.sqlite";
         a.click();
+        trackActivity({ action: "SQLITE_EXPORT_DB", label: fileName || "database.sqlite" });
     };
 
     return (
@@ -375,7 +387,7 @@ export default function SQLiteBrowserPage() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                    <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "SQLite Browser" })} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                         <ArrowLeft size={24} />
                     </Link>
                     <div>

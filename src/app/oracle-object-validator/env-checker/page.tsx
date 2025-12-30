@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import { DiffEditor, Editor } from "@monaco-editor/react";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
+import { trackActivity } from "@/lib/tracker";
 
 interface ExcelRow {
     [key: string]: any;
@@ -57,6 +58,7 @@ export default function ObjectDBEnvChecker() {
         workerRef.current.onmessage = (event: MessageEvent<OwnerMapping>) => {
             setOwnerMappings(event.data);
             setIsAutoMapping(false);
+            trackActivity({ action: "ENV_CHECKER_AUTO_MAP_SUCCESS", details: { mapped: Object.keys(event.data).length } });
         };
         return () => {
             workerRef.current?.terminate();
@@ -144,6 +146,7 @@ export default function ObjectDBEnvChecker() {
     const applyAutoMapping = (ownersList: string[]) => {
         if (!workerRef.current) return;
         setIsAutoMapping(true);
+        trackActivity({ action: "ENV_CHECKER_AUTO_MAP_START", details: { owners: ownersList.length } });
         workerRef.current.postMessage({
             owners: ownersList,
             connections: availableConnections,
@@ -170,6 +173,12 @@ export default function ObjectDBEnvChecker() {
         setIsComparing(true);
         setComparisonResults(null);
         setConnectionCheckStatus(null);
+
+        trackActivity({
+            action: 'ENV_CHECKER_COMPARE_START',
+            label: 'Start Comparison',
+            details: `Sheets: ${sheets.length} | Required Owners: ${requiredOwners.length}`
+        });
 
         try {
             // 1. Identify involved connections based on OwnerMappings
@@ -507,6 +516,12 @@ export default function ObjectDBEnvChecker() {
             return;
         }
 
+        trackActivity({
+            action: 'ENV_CHECKER_VIEW_DIFF',
+            label: `View Diff ${resultItem.item.name}`,
+            details: `Owner: ${owner} | Status: ${resultItem.status}`
+        });
+
         setIsFetchingDiff(true);
         try {
             // Force fetch DDL
@@ -564,6 +579,12 @@ export default function ObjectDBEnvChecker() {
             setAlertModal({ title: "Incomplete Configuration", message: "Missing connection details for this environment." });
             return;
         }
+
+        trackActivity({
+            action: 'ENV_CHECKER_COMPILE_INIT',
+            label: `Init Compile ${item.name}`,
+            details: `Direction: ${direction}`
+        });
 
         // We need the DDL. If we are in Diff Viewer, we might have it in `diffData`.
         // If coming from Table, we might not have it.
@@ -623,15 +644,30 @@ export default function ObjectDBEnvChecker() {
             const data = await res.json();
 
             if (res.ok) {
+                trackActivity({
+                    action: 'ENV_CHECKER_COMPILE_SUCCESS',
+                    label: `Compiled ${compileModal.item.name} (${compileModal.item.type})`,
+                    details: `Target: ${compileModal.targetEnv.name}`
+                });
                 setAlertModal({ title: "Success", message: "Object compiled successfully!", type: 'success' });
                 setCompileModal(null);
                 // Trigger Rescan
                 await handleRescan(compileModal.item);
             } else {
+                trackActivity({
+                    action: 'ENV_CHECKER_COMPILE_FAILED',
+                    label: compileModal.item.name,
+                    details: `Error: ${data.error}`
+                });
                 setAlertModal({ title: "Compilation Failed", message: (data.error || "Unknown Error") + "\n\n" + (data.details || ""), type: 'error' });
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Compile error", e);
+            trackActivity({
+                action: 'ENV_CHECKER_COMPILE_FAILED',
+                label: compileModal?.item?.name || 'Unknown',
+                details: `Network Error: ${e.message}`
+            });
             setAlertModal({ title: "Error", message: "Network error during compilation.", type: 'error' });
         } finally {
             setIsCompiling(false);
@@ -708,6 +744,12 @@ export default function ObjectDBEnvChecker() {
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const uploadedFile = e.target.files?.[0];
         if (!uploadedFile) return;
+
+        trackActivity({
+            action: 'ENV_CHECKER_FILE_UPLOAD',
+            label: 'Upload Excel',
+            details: `Filename: ${uploadedFile.name}`
+        });
 
         const validTypes = [
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -878,7 +920,7 @@ export default function ObjectDBEnvChecker() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
-                        <Link href="/oracle-object-validator" className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+                        <Link href="/oracle-object-validator" onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Env Checker' })} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
                             <ArrowLeft className="w-6 h-6" />
                         </Link>
                         <div>

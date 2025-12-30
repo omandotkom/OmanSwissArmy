@@ -6,6 +6,7 @@ import { ProjectSelector } from '@/components/ProjectSelector';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, Terminal, LogOut } from 'lucide-react';
 import { UserBadge } from "@/components/UserBadge";
+import { trackActivity } from "@/lib/tracker";
 
 interface PvcItem {
     name: string;
@@ -90,10 +91,10 @@ export default function PvcMigratorPage() {
             });
             const data = await res.json();
             if (res.ok) {
-                setIsLoggedIn(true);
-                fetchProjects();
+                trackActivity({ action: "LOGIN_SUCCESS", label: "OpenShift Login Success" });
             } else {
                 setLoginError(data.error);
+                trackActivity({ action: "LOGIN_FAILED", label: "OpenShift Login Failed", details: { error: data.error } });
             }
         } catch (err) {
             setLoginError('Server error');
@@ -142,6 +143,7 @@ export default function PvcMigratorPage() {
     };
 
     const handlePvcSelect = async (pvc: PvcItem) => {
+        trackActivity({ action: "SELECT_PVC", label: pvc.name, details: { capacity: pvc.capacity, sc: pvc.storageClass } });
         setSelectedPvc(pvc);
         setTargetPvcName(`${pvc.name}-new`);
         setDeleteOldPvc(false); // Reset
@@ -177,12 +179,14 @@ export default function PvcMigratorPage() {
             setShowConfirmModal(true);
         } else {
             setDeleteOldPvc(false);
+            trackActivity({ action: "TOGGLE_DELETE_PVC", label: "Unchecked" });
         }
     };
 
     const confirmDelete = () => {
         setDeleteOldPvc(true);
         setShowConfirmModal(false);
+        trackActivity({ action: "CONFIRM_DELETE_PVC", label: "User Confirmed Danger Action" });
     };
 
     const cancelDelete = () => {
@@ -211,6 +215,7 @@ export default function PvcMigratorPage() {
                     })
                 });
                 setActivePod(''); // Clear after delete
+                trackActivity({ action: "EMERGENCY_CLEANUP", label: "Deleted Pod", details: { pod: activePod } });
             }
 
             // Delete New PVC
@@ -250,6 +255,16 @@ export default function PvcMigratorPage() {
     }
 
     const startMigration = async () => {
+        trackActivity({
+            action: "START_MIGRATION",
+            label: `${selectedPvc?.name} -> ${targetPvcName}`,
+            details: {
+                strategy: migrationStrategy,
+                verifyMethod,
+                deleteOldPvc,
+                targetSc
+            }
+        });
         if (!selectedPvc || deployments.length === 0) {
             alert('Please select a PVC and ensure it is attached to a deployment (for now deployment auto-update logic requires it)');
             return;
@@ -344,6 +359,7 @@ export default function PvcMigratorPage() {
                     updateLastLog('success'); // Mark cleanup as success
                     addLog(`🎉 Migration Completed Successfully in ${duration}!`, 'success');
                     addLog(`IMPORTANT: Update your Git/YAML Deployment config to use PVC '${targetPvcName}' to prevent rollback!`, 'pending');
+                    trackActivity({ action: "MIGRATION_SUCCESS", label: "Migration Completed", details: { duration } });
                 } else {
                     updateLastLog('success');
                 }
@@ -355,6 +371,7 @@ export default function PvcMigratorPage() {
             // Add a specific error log entry so user sees it in the timeline
             addLog(`FAILED: ${e.message}`, 'error');
             alert(`Migration Failed: ${e.message}`);
+            trackActivity({ action: "MIGRATION_FAILED", label: e.message });
         } finally {
             setIsMigrating(false);
         }
@@ -439,7 +456,11 @@ export default function PvcMigratorPage() {
 
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
+                    <Link
+                        href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "Back to Home Header" })}
+                        className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white"
+                    >
                         <ArrowLeft size={20} />
                     </Link>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
@@ -448,7 +469,7 @@ export default function PvcMigratorPage() {
                 </div>
                 <div className="flex items-center gap-4">
                     <UserBadge />
-                    <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
+                    <button onClick={() => { setIsLoggedIn(false); trackActivity({ action: "CLICK_DISCONNECT", label: "Disconnect Auth" }); }} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
                         <LogOut size={16} /> Disconnect
                     </button>
                 </div>
@@ -476,7 +497,7 @@ export default function PvcMigratorPage() {
                         <label className="block text-sm font-medium mb-2">Project / Namespace</label>
                         <ProjectSelector
                             projects={projects}
-                            onSelect={setProject}
+                            onSelect={(p) => { setProject(p); trackActivity({ action: "SELECT_PROJECT", label: p }); }}
                             selectedProject={project}
                             isLoading={loadingProjects}
                         />
@@ -511,7 +532,7 @@ export default function PvcMigratorPage() {
                                                 <td className="p-3 text-gray-500">{pvc.storageClass}</td>
                                                 <td className="p-3">
                                                     <button
-                                                        onClick={() => { handlePvcSelect(pvc); setStep(2); }}
+                                                        onClick={() => { handlePvcSelect(pvc); setStep(2); trackActivity({ action: "CLICK_PVC_SELECT", label: pvc.name }); }}
                                                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-all shadow-lg shadow-blue-500/30"
                                                     >
                                                         Select
@@ -564,7 +585,7 @@ export default function PvcMigratorPage() {
                                     <select
                                         className="w-full bg-transparent border border-gray-600 rounded-lg p-2 text-white"
                                         value={targetSc}
-                                        onChange={(e) => setTargetSc(e.target.value)}
+                                        onChange={(e) => { setTargetSc(e.target.value); trackActivity({ action: "CHANGE_TARGET_SC", label: e.target.value }); }}
                                     >
                                         <option value="" className="text-black">Select Storage Class...</option>
                                         {scList.map(sc => <option key={sc} value={sc} className="text-black">{sc}</option>)}
@@ -601,7 +622,7 @@ export default function PvcMigratorPage() {
                                     <label className="block text-sm font-medium mb-2">Verification Method</label>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div
-                                            onClick={() => setVerifyMethod('SIZE')}
+                                            onClick={() => { setVerifyMethod('SIZE'); trackActivity({ action: "SELECT_VERIFY_METHOD", label: "SIZE (Quick)" }); }}
                                             className={`p-3 rounded-lg border cursor-pointer transition-all ${verifyMethod === 'SIZE' ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}
                                         >
                                             <div className="flex items-center gap-2 mb-1">
@@ -616,7 +637,7 @@ export default function PvcMigratorPage() {
                                         </div>
 
                                         <div
-                                            onClick={() => setVerifyMethod('CHECKSUM')}
+                                            onClick={() => { setVerifyMethod('CHECKSUM'); trackActivity({ action: "SELECT_VERIFY_METHOD", label: "CHECKSUM (Deep)" }); }}
                                             className={`p-3 rounded-lg border cursor-pointer transition-all ${verifyMethod === 'CHECKSUM' ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}
                                         >
                                             <div className="flex items-center gap-2 mb-1">
@@ -655,10 +676,10 @@ export default function PvcMigratorPage() {
                     </div>
 
                     <div className="flex justify-between pt-4">
-                        <button onClick={() => setStep(1)} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Back</button>
+                        <button onClick={() => { setStep(1); trackActivity({ action: "STEP_BACK", label: "Back to Step 1" }); }} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Back</button>
                         <button
                             disabled={!targetSc || !deploymentVolumeName}
-                            onClick={() => setStep(3)}
+                            onClick={() => { setStep(3); trackActivity({ action: "STEP_NEXT", label: "Review & Migrate Info", details: { targetPvcName, targetSc } }); }}
                             className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg shadow-lg"
                         >
                             Next: Review & Migrate
@@ -704,7 +725,7 @@ export default function PvcMigratorPage() {
 
                     <div className="flex justify-end space-x-4">
                         {!isMigrating && logs.length === 0 && (
-                            <button onClick={() => setStep(2)} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Cancel</button>
+                            <button onClick={() => { setStep(2); trackActivity({ action: "CANCEL_PRESIGN_OFF", label: "Cancel Step 3" }); }} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Cancel</button>
                         )}
                         <button
                             onClick={startMigration}

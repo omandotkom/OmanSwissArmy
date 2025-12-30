@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Database, CheckCircle, Settings, Search } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 export default function OracleObjectValidatorPage() {
     const features = [
@@ -51,6 +52,7 @@ export default function OracleObjectValidatorPage() {
                     <div className="flex items-center gap-4">
                         <Link
                             href="/"
+                            onClick={() => trackActivity({ action: "CLICK_BACK", label: "Oracle Validator Landing" })}
                             className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
                         >
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
@@ -77,7 +79,12 @@ export default function OracleObjectValidatorPage() {
 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {features.map((feature) => (
-                        <Link key={feature.title} href={feature.href} className="group relative block h-full">
+                        <Link
+                            key={feature.title}
+                            href={feature.href}
+                            onClick={() => trackActivity({ action: "NAVIGATE_TOOL", label: feature.title })}
+                            className="group relative block h-full"
+                        >
                             <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all duration-300 hover:border-zinc-700 hover:bg-zinc-900 hover:shadow-xl hover:shadow-blue-500/10 active:scale-[0.98]">
                                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800 ring-1 ring-inset ring-zinc-700 transition-colors group-hover:bg-zinc-800/80 group-hover:text-blue-400">
                                     {feature.icon}

@@ -8,6 +8,7 @@ import { DiffEditor } from "@monaco-editor/react";
 import { useToast, ToastContainer } from "@/components/ui/toast";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
+import { trackActivity } from "@/lib/tracker";
 
 interface ExcelRow {
     [key: string]: any;
@@ -173,6 +174,13 @@ export default function ThreeWayComparisonPage() {
         if (!uploadedFile) return;
 
         setExcelFile(uploadedFile);
+
+        trackActivity({
+            action: 'THREE_WAY_FILE_UPLOAD_EXCEL',
+            label: 'Upload Excel',
+            details: `Filename: ${uploadedFile.name}`
+        });
+
         setIsParsingExcel(true);
         const reader = new FileReader();
         reader.onload = (evt) => {
@@ -249,6 +257,12 @@ export default function ThreeWayComparisonPage() {
             }
         }
 
+        trackActivity({
+            action: 'THREE_WAY_FILE_UPLOAD_REPORT',
+            label: 'Upload Report',
+            details: `Filename: ${file.name}`
+        });
+
         const reader = new FileReader();
         reader.onload = (evt) => {
             const content = evt.target?.result as string;
@@ -322,6 +336,12 @@ export default function ThreeWayComparisonPage() {
         setJobLogs([]);
         setJobId(null);
 
+        trackActivity({
+            action: 'THREE_WAY_JOB_START',
+            label: 'Start Analysis',
+            details: `Owners: ${owners.length}`
+        });
+
         try {
             const res = await fetch('/api/oracle/three-way-stream', {
                 method: 'POST',
@@ -345,6 +365,11 @@ export default function ThreeWayComparisonPage() {
     const handleDownloadExcel = async () => {
         if (!jobId) return;
         setIsGeneratingExcel(true);
+        trackActivity({
+            action: 'THREE_WAY_DOWNLOAD_EXCEL',
+            label: 'Download Excel',
+            details: `JobId: ${jobId}`
+        });
         try {
             const response = await fetch(`/api/oracle/three-way-stream?jobId=${jobId}&download=true`);
             const blob = await response.blob();
@@ -468,9 +493,14 @@ export default function ThreeWayComparisonPage() {
             return;
         }
 
-        setIsDiffModalOpen(true);
         setIsLoadingDiff(true);
         setDiffContent({ master: '', slave: '', patch: '', title: `${owner}.${name} (${type})` });
+
+        trackActivity({
+            action: 'THREE_WAY_VIEW_DIFF',
+            label: `View Diff ${name}`,
+            details: `Owner: ${owner} | Type: ${type}`
+        });
 
         try {
             const res = await fetch('/api/oracle/fetch-ddl-diff', {
@@ -508,6 +538,7 @@ export default function ThreeWayComparisonPage() {
                     <div className="flex items-center gap-4">
                         <Link
                             href="/oracle-object-validator"
+                            onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Three-Way' })}
                             className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
                         >
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
@@ -1125,6 +1156,11 @@ export default function ThreeWayComparisonPage() {
                             <div className="flex gap-2">
                                 <button className="p-2 bg-blue-900/40 text-blue-200 hover:bg-blue-800 rounded text-xs font-semibold flex items-center gap-1"
                                     onClick={() => {
+                                        trackActivity({
+                                            action: 'THREE_WAY_DOWNLOAD_PATCH',
+                                            label: 'Download Patch',
+                                            details: `Title: ${diffContent.title}`
+                                        });
                                         const blob = new Blob([diffContent.patch], { type: 'text/sql' });
                                         const url = URL.createObjectURL(blob);
                                         const a = document.createElement('a');

@@ -24,6 +24,7 @@ import { useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { UserBadge } from "@/components/UserBadge";
 import { ProjectSelector } from "@/components/ProjectSelector";
+import { trackActivity } from "@/lib/tracker";
 
 interface FileItem {
     name: string;
@@ -139,12 +140,13 @@ function PvcBrowserContent() {
             });
             const data = await res.json();
             if (res.ok) {
-                // Refresh
                 fetchFiles(selectedProject, selectedPodName, currentPath);
                 setDeleteItem(null);
+                trackActivity({ action: "DELETE_FILE_SUCCESS", label: deleteItem, details: { project: selectedProject, pod: selectedPodName } });
             } else {
                 setError(data.error);
                 setDeleteItem(null);
+                trackActivity({ action: "DELETE_FILE_FAILED", label: deleteItem, details: { error: data.error } });
             }
         } catch (e) { setError('Delete failed'); }
         finally { setIsDeleting(false); }
@@ -201,8 +203,10 @@ function PvcBrowserContent() {
             if (res.ok) {
                 setIsLoggedIn(true);
                 fetchProjects();
+                trackActivity({ action: "LOGIN_SUCCESS", label: "OpenShift Login" });
             } else {
                 setLoginError(data.error);
+                trackActivity({ action: "LOGIN_FAILED", label: "OpenShift Login Failed", details: { error: data.error } });
             }
         } catch (err) {
             setLoginError('Server error');
@@ -319,6 +323,7 @@ function PvcBrowserContent() {
             setSearchLogs(prev => [...prev, 'Error: Search failed']);
         } finally {
             setIsSearching(false);
+            trackActivity({ action: "SEARCH_STORAGE_SC", label: "px-sc", details: { results: searchResults.length } });
         }
     };
 
@@ -329,6 +334,7 @@ function PvcBrowserContent() {
         const ws = XLSX.utils.json_to_sheet(searchResults);
         XLSX.utils.book_append_sheet(wb, ws, "px-sc-finder");
         XLSX.writeFile(wb, "px-sc-storage-finder.xlsx");
+        trackActivity({ action: "EXPORT_EXCEL", label: "px-sc-storage-finder.xlsx" });
     };
 
     const handlePodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -349,6 +355,7 @@ function PvcBrowserContent() {
         } else {
             setCurrentPath('/');
         }
+        trackActivity({ action: "PVC_SELECT_POD", label: podName, details: { project: selectedProject } });
     };
 
     const handleMountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -362,6 +369,7 @@ function PvcBrowserContent() {
     const handleFolderClick = (folderName: string) => {
         const newPath = currentPath === '/' ? `/${folderName}` : `${currentPath}/${folderName}`;
         setCurrentPath(newPath);
+        trackActivity({ action: "NAVIGATE_FOLDER", label: folderName, details: { path: newPath } });
     };
 
     const handleFileView = async (fileName: string) => {
@@ -371,6 +379,7 @@ function PvcBrowserContent() {
             const res = await fetch(url);
             const text = await res.text();
             setPreviewContent(text);
+            trackActivity({ action: "VIEW_FILE_PREVIEW", label: fileName });
         } catch (e) { alert('Failed to load file'); }
     };
 
@@ -431,7 +440,7 @@ function PvcBrowserContent() {
                 </div>
                 <div className="flex items-center gap-4">
                     {isLoggedIn && <UserBadge />}
-                    <button onClick={() => setIsLoggedIn(false)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
+                    <button onClick={() => { setIsLoggedIn(false); trackActivity({ action: "LOGOUT", label: "Disconnect Button" }); }} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors border border-slate-700">
                         <LogOut size={16} /> Disconnect
                     </button>
                 </div>
@@ -461,7 +470,7 @@ function PvcBrowserContent() {
                         <ProjectSelector
                             projects={projects}
                             selectedProject={selectedProject}
-                            onSelect={setSelectedProject}
+                            onSelect={(p) => { setSelectedProject(p); trackActivity({ action: "SELECT_PROJECT", label: p }); }}
                             placeholder="Select Project"
                         />
                     </div>
@@ -580,10 +589,10 @@ function PvcBrowserContent() {
                                                 {!file.isDirectory && (
                                                     <>
                                                         <button onClick={(e) => { e.stopPropagation(); handleFileView(file.name); }} className="p-1 hover:text-blue-400" title="View"><Eye size={18} /></button>
-                                                        <a href={`/api/oc/read?namespace=${selectedProject}&pod=${selectedPodName}&path=${encodeURIComponent((currentPath === '/' ? '' : currentPath) + '/' + file.name)}&download=true`} target="_blank" rel="noreferrer" className="p-1 hover:text-green-400" title="Download" onClick={(e) => e.stopPropagation()}><Download size={18} /></a>
+                                                        <a href={`/api/oc/read?namespace=${selectedProject}&pod=${selectedPodName}&path=${encodeURIComponent((currentPath === '/' ? '' : currentPath) + '/' + file.name)}&download=true`} target="_blank" rel="noreferrer" className="p-1 hover:text-green-400" title="Download" onClick={(e) => { e.stopPropagation(); trackActivity({ action: "DOWNLOAD_FILE", label: file.name }); }}><Download size={18} /></a>
                                                     </>
                                                 )}
-                                                <button onClick={(e) => { e.stopPropagation(); setDeleteItem(file.name); }} className="p-1 hover:text-red-500" title="Delete"><Trash2 size={18} /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); setDeleteItem(file.name); trackActivity({ action: "DELETE_INIT", label: file.name }); }} className="p-1 hover:text-red-500" title="Delete"><Trash2 size={18} /></button>
                                             </div>
                                         </td>
                                     </tr>

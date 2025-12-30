@@ -16,6 +16,7 @@ import {
     FileText,
     Binary
 } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 // --- Types ---
 
@@ -215,6 +216,7 @@ export default function DirectoryDiffPage() {
 
     const startComparison = async () => {
         setIsComparing(true);
+        trackActivity({ action: "DIR_COMPARE_START", details: { leftCount: leftFiles.length, rightCount: rightFiles.length } });
         setProgress(0);
         setCurrentScannedFile("Initializing...");
         setDiffTree(null);
@@ -397,6 +399,7 @@ export default function DirectoryDiffPage() {
                 <div className="flex items-center gap-4">
                     <Link
                         href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "Directory Diff" })}
                         className="flex items-center justify-center rounded-full p-2 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
                     >
                         <ArrowLeft className="h-5 w-5" />

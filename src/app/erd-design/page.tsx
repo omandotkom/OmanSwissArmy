@@ -21,6 +21,7 @@ import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Download, Upload, Database, X, Trash2, Code, FileCode } from 'lucide-react';
 import Editor from "@monaco-editor/react";
+import { trackActivity } from "@/lib/tracker";
 
 import TableNode from '@/components/erd/TableNode';
 import { generateSql, DbType, ErdNode, ErdEdge, TableData } from '@/lib/erd/sql-generator';
@@ -78,6 +79,7 @@ function ErdCanvas() {
             data: { ...defaultTableData, label: `Table_${nodes.length + 1}` },
         };
         setNodes((nds) => nds.concat(newNode));
+        trackActivity({ action: "ERD_ADD_TABLE", label: "Add Table" });
     };
 
     const handleNodeClick = (_: React.MouseEvent, node: Node) => {
@@ -108,6 +110,7 @@ function ErdCanvas() {
         link.download = "erd_schema.json";
         link.click();
         addToast("Exported successfully", "success");
+        trackActivity({ action: "ERD_EXPORT_JSON", label: "Export Schema", details: { nodes: nodes.length } });
     };
 
     const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +126,7 @@ function ErdCanvas() {
                     setNodes(parsed.nodes);
                     setEdges(parsed.edges);
                     addToast("Imported successfully", "success");
+                    trackActivity({ action: "ERD_IMPORT_JSON", label: "Import Schema", details: { nodes: parsed.nodes.length } });
                 } else {
                     addToast("Invalid JSON format", "error");
                 }
@@ -140,6 +144,7 @@ function ErdCanvas() {
         const sql = generateSql(nodes as unknown as ErdNode[], edges as unknown as ErdEdge[], dbType);
         setGeneratedSql(sql);
         setSqlModalOpen(true);
+        trackActivity({ action: "ERD_GENERATE_SQL", label: dbType, details: { length: sql.length } });
     };
 
     // DDL Import
@@ -155,6 +160,7 @@ function ErdCanvas() {
             setDdlModalOpen(false);
             setDdlContent('');
             addToast(`Imported ${newNodes.length} tables successfully`, "success");
+            trackActivity({ action: "ERD_IMPORT_DDL", label: "Import DDL", details: { tables: newNodes.length } });
         } catch (error) {
             addToast("Failed to parse DDL", "error");
             console.error(error);
@@ -196,7 +202,7 @@ function ErdCanvas() {
             {/** Top Bar */}
             <div className="h-14 border-b border-zinc-800 bg-zinc-900 flex items-center justify-between px-4 z-10">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="text-zinc-400 hover:text-zinc-200 transition-colors">
+                    <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "ERD Designer" })} className="text-zinc-400 hover:text-zinc-200 transition-colors">
                         ← Home
                     </Link>
                     <h1 className="text-lg font-semibold text-zinc-100">ERD Designer</h1>

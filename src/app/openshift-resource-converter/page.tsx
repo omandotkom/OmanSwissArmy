@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Cpu, HardDrive, Copy, Check, Info } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 export default function OpenShiftResourceConverter() {
     const [cpuInput, setCpuInput] = useState<string>("1000m");
@@ -91,6 +92,7 @@ export default function OpenShiftResourceConverter() {
         navigator.clipboard.writeText(text);
         setCopied(key);
         setTimeout(() => setCopied(null), 2000);
+        trackActivity({ action: "COPY_RESOURCE_VALUE", label: key, details: { value: text } });
     };
 
     return (
@@ -101,6 +103,7 @@ export default function OpenShiftResourceConverter() {
                 <div className="flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
                     <Link
                         href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "OpenShift Converter" })}
                         className="p-2 rounded-full hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
                     >
                         <ArrowLeft className="w-6 h-6" />

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, Loader2, Download, AlertTriangle, CheckCircle2, Trash2, FileText } from "lucide-react";
 import * as XLSX from "xlsx";
 import { v4 as uuidv4 } from "uuid";
+import { trackActivity } from "@/lib/tracker";
 
 interface MergedObject {
     key: string;
@@ -79,6 +80,12 @@ export default function ObjectDBMergerPage() {
         if (e.target.files && e.target.files.length > 0) {
             const rawFiles = Array.from(e.target.files);
 
+            trackActivity({
+                action: 'DB_MERGER_FILE_ADD',
+                label: 'Add Files',
+                details: `Count: ${rawFiles.length}`
+            });
+
             // Filter duplicates by name from existing list
             const existingNames = new Set(fileList.map(f => f.file.name));
             const uniqueFiles = rawFiles.filter(f => !existingNames.has(f.name));
@@ -112,6 +119,12 @@ export default function ObjectDBMergerPage() {
 
     const processFiles = async () => {
         if (fileList.length === 0) return;
+
+        trackActivity({
+            action: 'DB_MERGER_PROCESS_START',
+            label: 'Start Merge',
+            details: `Files: ${fileList.length}`
+        });
 
         setIsProcessing(true);
         setProgress(0);
@@ -237,6 +250,11 @@ export default function ObjectDBMergerPage() {
         }
 
         try {
+            trackActivity({
+                action: 'DB_MERGER_DOWNLOAD',
+                label: 'Download Merged File',
+                details: `Sheets: ${mergedData.size} | Rows: ${Array.from(mergedData.values()).reduce((a, b) => a + b.length, 0)}`
+            });
             // 1. Fetch Template
             const response = await fetch('/OBJ_DB_TEMPLATE.xlsx');
             if (!response.ok) throw new Error("Template file not found. Ensure OBJ_DB_TEMPLATE.xlsx is in public folder.");
@@ -339,7 +357,7 @@ export default function ObjectDBMergerPage() {
             <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-4">
-                        <Link href="/oracle-object-validator" className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
+                        <Link href="/oracle-object-validator" onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from DB Merger' })} className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
                             <ArrowLeft className="h-4 w-4" /> Back
                         </Link>
                         <h1 className="text-xl font-semibold">Object DB Merger</h1>

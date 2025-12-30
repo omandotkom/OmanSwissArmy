@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, Check, Lock, Unlock, ShieldCheck } from "lucide-react";
 import CryptoJS from "crypto-js";
+import { trackActivity } from "@/lib/tracker";
 
 type Algorithm = "AES" | "DES" | "TripleDES" | "Rabbit" | "RC4";
 
@@ -72,6 +73,7 @@ export default function EncryptDecryptPage() {
                 }
             }
             setOutput(result);
+            trackActivity({ action: "ENCRYPT_DECRYPT_PROCESS", label: mode, details: { algorithm, inputLen: input.length } });
         } catch (err) {
             setError("An error occurred during processing. Please check your input.");
             console.error(err);
@@ -83,6 +85,7 @@ export default function EncryptDecryptPage() {
         navigator.clipboard.writeText(output);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+        trackActivity({ action: "COPY_ENCRYPT_DECRYPT_RESULT" });
     };
 
     return (
@@ -91,6 +94,7 @@ export default function EncryptDecryptPage() {
                 <div className="mb-8 flex items-center gap-4">
                     <Link
                         href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "Encrypt Decrypt" })}
                         className="rounded-full bg-zinc-900 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                     >
                         <ArrowLeft className="h-6 w-6" />
@@ -117,10 +121,13 @@ export default function EncryptDecryptPage() {
                                 {(["AES", "DES", "TripleDES", "Rabbit", "RC4"] as Algorithm[]).map((algo) => (
                                     <button
                                         key={algo}
-                                        onClick={() => setAlgorithm(algo)}
+                                        onClick={() => {
+                                            setAlgorithm(algo);
+                                            trackActivity({ action: "CHANGE_ALGORITHM", label: algo });
+                                        }}
                                         className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${algorithm === algo
-                                                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-lg shadow-indigo-900/20"
-                                                : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-lg shadow-indigo-900/20"
+                                            : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                                             }`}
                                     >
                                         <span className="font-medium">{algo}</span>
@@ -148,20 +155,28 @@ export default function EncryptDecryptPage() {
                         {/* Mode Switcher */}
                         <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
                             <button
-                                onClick={() => { setMode("encrypt"); setOutput(""); }}
+                                onClick={() => {
+                                    setMode("encrypt");
+                                    setOutput("");
+                                    trackActivity({ action: "CHANGE_MODE", label: "encrypt" });
+                                }}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === "encrypt"
-                                        ? "bg-indigo-600 text-white shadow-lg"
-                                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                                    ? "bg-indigo-600 text-white shadow-lg"
+                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                                     }`}
                             >
                                 <Lock className="h-4 w-4" />
                                 Encrypt
                             </button>
                             <button
-                                onClick={() => { setMode("decrypt"); setOutput(""); }}
+                                onClick={() => {
+                                    setMode("decrypt");
+                                    setOutput("");
+                                    trackActivity({ action: "CHANGE_MODE", label: "decrypt" });
+                                }}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === "decrypt"
-                                        ? "bg-emerald-600 text-white shadow-lg"
-                                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                                    ? "bg-emerald-600 text-white shadow-lg"
+                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                                     }`}
                             >
                                 <Unlock className="h-4 w-4" />
@@ -185,8 +200,8 @@ export default function EncryptDecryptPage() {
                         <button
                             onClick={handleProcess}
                             className={`w-full py-4 rounded-xl font-medium text-lg shadow-lg active:scale-[0.99] transition-all flex items-center justify-center gap-2 ${mode === "encrypt"
-                                    ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
-                                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
+                                ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
+                                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
                                 }`}
                         >
                             {mode === "encrypt" ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}

@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { ArrowRight, CheckCircle, AlertTriangle, GitMerge, FileWarning, Search, FolderOpen } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 export default function GitConflictDetectorPage() {
     const [repoPath, setRepoPath] = useState(""); // Default to empty, will use server default if empty
@@ -45,6 +46,7 @@ export default function GitConflictDetectorPage() {
         } catch (err: any) {
             setError(err.message);
             setBranches([]);
+            trackActivity({ action: "GIT_FETCH_BRANCHES_FAILED", details: { error: err.message } });
         } finally {
             setIsLoadingBranches(false);
         }
@@ -75,8 +77,10 @@ export default function GitConflictDetectorPage() {
             }
 
             setResult(data);
+            trackActivity({ action: "GIT_CHECK_CONFLICTS", label: `${sourceBranch} -> ${targetBranch}`, details: { hasConflicts: data.hasConflicts, filesCount: data.conflictingFiles?.length || 0 } });
         } catch (err: any) {
             setError(err.message);
+            trackActivity({ action: "GIT_CHECK_CONFLICTS_FAILED", details: { error: err.message } });
         } finally {
             setIsChecking(false);
         }
@@ -226,6 +230,7 @@ export default function GitConflictDetectorPage() {
                                                                 const detail = result.detailedConflicts?.find((d) => d.file === file);
                                                                 if (detail) {
                                                                     setSelectedConflict({ file, content: detail.content });
+                                                                    trackActivity({ action: "GIT_VIEW_CONFLICT_DETAIL", label: file });
                                                                 }
                                                             }}
                                                             className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors border border-red-500/20 font-medium"

@@ -9,6 +9,7 @@ import {
     getEncryptedExportData, importEncryptedData
 } from "@/services/connection-storage";
 import { v4 as uuidv4 } from "uuid";
+import { trackActivity } from "@/lib/tracker";
 
 interface ConnectionManagerProps {
     isOpen: boolean;
@@ -107,6 +108,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
         setIsEditing(false);
         setShowPassword(false);
         setTestResult(null);
+        trackActivity({ action: "RESET_FORM", label: "New Connection Form" });
     };
 
     const performSave = async (shouldReset = true) => {
@@ -123,14 +125,17 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
         } else {
             // If not resetting, we should at least update local state to have the ID so it's now in "Edit Mode"
             setFormData(prev => ({ ...prev, id: idToUse }));
+            setFormData(prev => ({ ...prev, id: idToUse }));
             setIsEditing(true); // Switch to edit mode visually if not already
         }
+        trackActivity({ action: "SAVE_CONNECTION", label: connToSave.name, details: { host: connToSave.host, port: connToSave.port } });
         return connToSave;
     };
 
     const handleTestConnection = async () => {
         setIsTesting(true);
         setTestResult(null);
+        trackActivity({ action: "TEST_CONNECTION_START", label: formData.name || "New Connection" });
         try {
             const res = await fetch('/api/oracle/test-connection', {
                 method: 'POST',
@@ -143,8 +148,10 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
                 // Auto Save on Success
                 await performSave(false);
                 addToast("Connection successful and saved!", "success");
+                trackActivity({ action: "TEST_CONNECTION_SUCCESS", label: formData.host });
             } else {
                 setTestResult({ success: false, error: data.error });
+                trackActivity({ action: "TEST_CONNECTION_FAILED", label: formData.host, details: { error: data.error } });
             }
         } catch (error) {
             setTestResult({ success: false, error: "Network or Server Error" });
@@ -165,6 +172,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
         }));
         setCheckAllStatus(initialStatuses);
         setCheckAllSort('default');
+        trackActivity({ action: "CHECK_ALL_CONNECTIONS", label: `Checking ${connections.length} items` });
 
         // Use a slight delay to allow UI to render modal
         await new Promise(r => setTimeout(r, 100));
@@ -202,12 +210,14 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
     const handleEdit = (conn: OracleConnection) => {
         setFormData({ ...conn, password: conn.password || "" });
         setIsEditing(true);
+        trackActivity({ action: "EDIT_CONNECTION", label: conn.name });
     };
 
     const handleDelete = async (id: string) => {
         if (confirm("Are you sure you want to delete this connection?")) {
             await deleteConnection(id);
             loadConnections();
+            trackActivity({ action: "DELETE_CONNECTION", label: id });
         }
     };
 
@@ -251,6 +261,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
 
                 loadConnections();
                 alert(`Imported ${count} connections. Please update their passwords manually.`);
+                trackActivity({ action: "IMPORT_SQL_DEV", label: "Success", details: { count } });
             } catch (err) {
                 console.error("Import failed", err);
                 alert("Failed to parse SQL Developer JSON.");
@@ -272,6 +283,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            trackActivity({ action: "SUPER_EXPORT", label: "Success" });
         } catch (err) {
             console.error("Super Export failed", err);
             alert("Failed to export connections.");
@@ -289,6 +301,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
                 const count = await importEncryptedData(content);
                 alert(`Successfully imported ${count} connections securely.`);
                 loadConnections();
+                trackActivity({ action: "SUPER_IMPORT", label: "Success", details: { count } });
             } catch (err) {
                 console.error("Super Import failed", err);
                 alert("Failed to import. Invalid file or corruption.");
@@ -376,7 +389,7 @@ export default function ConnectionManager({ isOpen, onClose, onSelect, embedded 
                                 </div>
                                 {onSelect && (
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); onSelect(conn); onClose(); }}
+                                        onClick={(e) => { e.stopPropagation(); onSelect(conn); onClose(); trackActivity({ action: "SELECT_CONNECTION", label: conn.name }); }}
                                         className="absolute right-2 bottom-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all"
                                     >
                                         Select

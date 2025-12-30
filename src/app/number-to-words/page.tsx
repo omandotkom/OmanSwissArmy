@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, Check, RotateCcw, Languages } from "lucide-react";
 import { convertNumberToWords } from "@/lib/numberToWords";
+import { trackActivity } from "@/lib/tracker";
 
 export default function NumberToWordsPage() {
     const [inputNumber, setInputNumber] = useState<string>("");
@@ -47,10 +48,12 @@ export default function NumberToWordsPage() {
         navigator.clipboard.writeText(result);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+        trackActivity({ action: "COPY_NUMBER_WORDS", label: language });
     };
 
     const handleClear = () => {
         setInputNumber("");
+        trackActivity({ action: "CLEAR_NUMBER_INPUT" });
     };
 
     return (
@@ -60,6 +63,7 @@ export default function NumberToWordsPage() {
                 <div className="flex items-center gap-4">
                     <Link
                         href="/"
+                        onClick={() => trackActivity({ action: "CLICK_BACK", label: "Number To Words" })}
                         className="flex items-center justify-center rounded-full p-2 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
                     >
                         <ArrowLeft className="h-5 w-5" />
@@ -108,7 +112,7 @@ export default function NumberToWordsPage() {
                                 </label>
                                 <div className="grid grid-cols-2 gap-3 p-1 bg-zinc-950/50 rounded-xl border border-zinc-800">
                                     <button
-                                        onClick={() => setLanguage("id")}
+                                        onClick={() => { setLanguage("id"); trackActivity({ action: "CHANGE_LANGUAGE", label: "ID" }); }}
                                         className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all ${language === "id"
                                             ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
                                             : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -117,7 +121,7 @@ export default function NumberToWordsPage() {
                                         <span className="text-lg">🇮🇩</span> Indonesia
                                     </button>
                                     <button
-                                        onClick={() => setLanguage("en")}
+                                        onClick={() => { setLanguage("en"); trackActivity({ action: "CHANGE_LANGUAGE", label: "EN" }); }}
                                         className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-all ${language === "en"
                                             ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
                                             : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"

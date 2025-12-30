@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function HtmlEntity() {
     const [input, setInput] = useState("");
@@ -22,6 +23,7 @@ export default function HtmlEntity() {
             txt.innerHTML = text;
             setOutput(txt.value);
         }
+        trackActivity({ action: "HTML_ENTITY_CONVERT", label: currentMode });
     };
 
     return (
@@ -30,6 +32,7 @@ export default function HtmlEntity() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">HTML Entity Encoder</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "HTML Entity" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

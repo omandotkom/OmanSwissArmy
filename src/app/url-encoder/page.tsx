@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function UrlEncoder() {
     const [input, setInput] = useState("");
@@ -24,6 +25,7 @@ export default function UrlEncoder() {
         } catch (e) {
             setOutput("Error: Invalid URI sequence");
         }
+        trackActivity({ action: "URL_CONVERT", label: currentMode });
     };
 
     return (
@@ -32,6 +34,7 @@ export default function UrlEncoder() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">URL Encoder / Decoder</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "URL Encoder" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

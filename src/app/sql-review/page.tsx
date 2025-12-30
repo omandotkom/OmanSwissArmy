@@ -3,8 +3,10 @@
 import React, { useState } from 'react';
 import { useSqlReview } from '@/hooks/useSqlReview';
 import Editor from '@monaco-editor/react';
-import { Bot, Bug, Shield, Activity, ChevronRight, Loader2, Database } from 'lucide-react';
+import { Bot, Bug, Shield, Activity, ChevronRight, Loader2, Database, ArrowLeft } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function SqlReviewPage() {
     const {
@@ -58,6 +60,7 @@ export default function SqlReviewPage() {
             if (!res.ok) throw new Error(data.error || 'Failed to fetch');
 
             setFetchedCode(data.ddl);
+            trackActivity({ action: "SQL_FETCH_DDL", details: { owner: spOwner, name: spName } });
         } catch (err: any) {
             setFetchError(err.message);
             // Untuk demo testing jika API gagal, kita kasih dummy code biar user bisa coba AI
@@ -72,6 +75,13 @@ export default function SqlReviewPage() {
 
             {/* Header */}
             <header className="mb-8 flex items-center gap-3">
+                <Link
+                    href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "SQL Review" })}
+                    className="p-2 mr-2 rounded-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-all shadow-sm"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </Link>
                 <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
                     <Bot className="w-8 h-8 text-white" />
                 </div>
@@ -161,7 +171,10 @@ export default function SqlReviewPage() {
 
                     {/* Calculate Button */}
                     <button
-                        onClick={() => reviewSql(fetchedCode)}
+                        onClick={() => {
+                            reviewSql(fetchedCode);
+                            trackActivity({ action: "SQL_AI_REVIEW_START", details: { length: fetchedCode.length } });
+                        }}
                         disabled={!isReady || !fetchedCode || isAiThinking}
                         className={`
                             py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-3

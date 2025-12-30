@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Editor from "@monaco-editor/react";
+import { trackActivity } from "@/lib/tracker";
 
 export default function MarkdownPreview() {
     const [markdown, setMarkdown] = useState("# Hello World\n\nWrite some **markdown** here!\n\n- Item 1\n- Item 2\n\n```js\nconsole.log('Code block');\n```");
@@ -44,6 +45,7 @@ export default function MarkdownPreview() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Markdown Previewer</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Markdown Preview" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 const WORDS = [
     "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit",
@@ -59,12 +60,15 @@ export default function LoremIpsum() {
                 result.push(paragraph.join(" "));
             }
             setText(result.join("\n\n"));
+            setText(result.join("\n\n"));
         }
+        trackActivity({ action: "GENERATE_LOREM", details: { count, type } });
     };
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(text);
         alert("Copied!");
+        trackActivity({ action: "COPY_LOREM" });
     };
 
     return (
@@ -73,6 +77,7 @@ export default function LoremIpsum() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Lorem Ipsum Generator</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Lorem Ipsum" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

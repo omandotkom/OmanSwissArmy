@@ -18,6 +18,7 @@ import {
     deleteS3Connection,
     S3ConnectionProfile
 } from '@/services/connection-storage';
+import { trackActivity } from "@/lib/tracker";
 
 // --- Types ---
 
@@ -149,6 +150,7 @@ export default function S3BrowserPage() {
             setIsEditingProfile(false);
             setActiveProfileId(null);
             setError('');
+            trackActivity({ action: "SAVE_S3_PROFILE", label: formName });
         } catch (e) {
             setError('Failed to save to database');
         }
@@ -159,6 +161,7 @@ export default function S3BrowserPage() {
         if (confirm('Delete this connection profile?')) {
             await deleteS3Connection(id);
             await loadProfiles();
+            trackActivity({ action: "DELETE_S3_PROFILE", label: id });
         }
     };
 
@@ -206,16 +209,20 @@ export default function S3BrowserPage() {
                 const merged = [...initialBuckets, ...fetched.filter(b => !initialBuckets.find(mb => mb.Name === b.Name))];
                 setBuckets(merged);
                 setIsConnected(true);
+                trackActivity({ action: "S3_CONNECT_SUCCESS", label: profileToUse?.name || "Manual" });
             } else {
                 console.warn("Listing failed:", data.error);
                 if (initialBuckets.length > 0) {
                     setBuckets(initialBuckets);
                     setIsConnected(true);
+                    trackActivity({ action: "S3_CONNECT_PARTIAL", label: "Used Cached Buckets" });
                 } else if (data.error && (data.error.includes('AccessDenied') || data.error.includes('Forbidden'))) {
                     setIsConnected(true);
                     setTimeout(() => alert("Connected, but 'ListAllMyBuckets' was denied.\nPlease add known buckets manually via the (+) button."), 500);
+                    trackActivity({ action: "S3_CONNECT_DENIED_LIST", label: "Access Denied List" });
                 } else {
                     setError(data.error || 'Connection Failed');
+                    trackActivity({ action: "S3_CONNECT_FAILED", label: data.error });
                 }
             }
 
@@ -256,6 +263,7 @@ export default function S3BrowserPage() {
         setShowAddBucketModal(false);
         setNewBucketName('');
         handleBucketSelect(newBucketName);
+        trackActivity({ action: "ADD_MANUAL_BUCKET", label: newBucketName });
     };
 
     const handleDisconnect = () => {
@@ -268,6 +276,7 @@ export default function S3BrowserPage() {
         setIsEditingProfile(false);
         setFormName('');
         setFormConfig({ endpoint: '', region: 'us-east-1', accessKeyId: '', secretAccessKey: '' });
+        trackActivity({ action: "S3_DISCONNECT", label: "User Disconnect" });
     };
 
     const fetchFiles = async (bucket: string, prefix: string) => {
@@ -299,6 +308,7 @@ export default function S3BrowserPage() {
         setCurrentPrefix('');
         setBucketUsage(null);
         fetchFiles(bucketName, '');
+        trackActivity({ action: "SELECT_BUCKET", label: bucketName });
     };
 
     // ... File Op Helpers ...
@@ -306,6 +316,7 @@ export default function S3BrowserPage() {
         const newPrefix = currentPrefix + folderName + '/';
         setCurrentPrefix(newPrefix);
         fetchFiles(selectedBucket, newPrefix);
+        trackActivity({ action: "NAVIGATE_S3_FOLDER", label: folderName });
     };
 
     const handleUpLevel = () => {
@@ -328,7 +339,10 @@ export default function S3BrowserPage() {
                 body: JSON.stringify({ ...cfg, bucketName: selectedBucket, key: fileKey })
             });
             const data = await res.json();
-            if (res.ok && data.url) window.open(data.url, '_blank');
+            if (res.ok && data.url) {
+                window.open(data.url, '_blank');
+                trackActivity({ action: "DOWNLOAD_S3_FILE", label: fileKey });
+            }
             else alert('Download failed');
         } catch (e) { alert('Error'); }
     };
@@ -349,6 +363,7 @@ export default function S3BrowserPage() {
             if (res.ok) {
                 setBucketUsage(data);
                 setShowAnalysisModal(true); // Auto show analysis after calc
+                trackActivity({ action: "CALC_USAGE_SUCCESS", label: selectedBucket, details: { count: data.objectCount, size: data.totalSize } });
             }
             else alert('Calc failed: ' + data.error);
         } catch (e) { alert('Error'); } finally { setUsageLoading(false); }
@@ -370,6 +385,7 @@ export default function S3BrowserPage() {
             }
         }
         setShowCapacityModal(false);
+        trackActivity({ action: "SAVE_CAPACITY", label: selectedBucket, details: { gb: parseFloat(capacityInput) } });
     };
 
     // Get Capacity for current view
@@ -469,6 +485,7 @@ export default function S3BrowserPage() {
                     url: data.url,
                     content: content
                 });
+                trackActivity({ action: "PREVIEW_S3_FILE", label: fileName, details: { type } });
             } else {
                 alert('Preview unable to generate URL');
             }

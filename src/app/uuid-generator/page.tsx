@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 export default function UuidGenerator() {
     const [count, setCount] = useState(1);
@@ -10,11 +11,13 @@ export default function UuidGenerator() {
     const generate = () => {
         const newUuids = Array.from({ length: count }, () => crypto.randomUUID());
         setUuids(newUuids);
+        trackActivity({ action: "GENERATE_UUID", details: { count } });
     };
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(uuids.join("\n"));
         alert("Copied to clipboard!");
+        trackActivity({ action: "COPY_UUID" });
     };
 
     return (
@@ -23,6 +26,7 @@ export default function UuidGenerator() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">UUID Generator</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "UUID Generator" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

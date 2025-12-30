@@ -8,6 +8,7 @@ import { DiffEditor } from "@monaco-editor/react";
 import { useToast, ToastContainer } from "@/components/ui/toast";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
+import { trackActivity } from "@/lib/tracker";
 
 interface OwnerMapValue {
     master: OracleConnection | null;
@@ -98,6 +99,13 @@ export default function TwoWayComparisonPage() {
             return;
         }
         setTargetOwners(prev => new Set(prev).add(val));
+
+        trackActivity({
+            action: 'TWO_WAY_SCHEMA_ADD',
+            label: 'Add Schema',
+            details: `Schema: ${val}`
+        });
+
         setNewOwnerInput("");
     };
 
@@ -133,6 +141,12 @@ export default function TwoWayComparisonPage() {
             addToast("Please add at least one schema to scan", "error");
             return;
         }
+
+        trackActivity({
+            action: 'TWO_WAY_JOB_START',
+            label: 'Start Comparison',
+            details: `Schemas: ${owners.length}`
+        });
 
         const missingConfig = owners.some(o => !ownerMappings[o]?.master || !ownerMappings[o]?.slave);
         if (missingConfig) {
@@ -171,6 +185,11 @@ export default function TwoWayComparisonPage() {
     const handleDownloadExcel = async () => {
         if (!jobId) return;
         setIsGeneratingExcel(true);
+        trackActivity({
+            action: 'TWO_WAY_DOWNLOAD_EXCEL',
+            label: 'Download Excel',
+            details: `JobId: ${jobId}`
+        });
         try {
             const response = await fetch(`/api/oracle/two-way-stream?jobId=${jobId}&download=true`);
             const blob = await response.blob();
@@ -248,6 +267,12 @@ export default function TwoWayComparisonPage() {
         setIsLoadingDiff(true);
         setDiffContent({ master: '', slave: '', patch: '', title: `${owner}.${name} (${type})` });
 
+        trackActivity({
+            action: 'TWO_WAY_VIEW_DIFF',
+            label: `View Diff ${name}`,
+            details: `Owner: ${owner} | Type: ${type}`
+        });
+
         try {
             // Reuse the existing Diff Fetcher from Three-Way (it is generic enough!)
             const res = await fetch('/api/oracle/fetch-ddl-diff', {
@@ -283,7 +308,7 @@ export default function TwoWayComparisonPage() {
             <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-4">
-                        <Link href="/oracle-object-validator" className="group rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white flex items-center gap-2">
+                        <Link href="/oracle-object-validator" onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Two-Way' })} className="group rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white flex items-center gap-2">
                             <ArrowLeft className="h-4 w-4" /> Back
                         </Link>
                         <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-100">
@@ -601,6 +626,11 @@ export default function TwoWayComparisonPage() {
                             <div className="flex gap-3">
                                 <button className="p-2 bg-blue-900/40 text-blue-200 hover:bg-blue-800 rounded text-xs font-semibold flex items-center gap-1"
                                     onClick={() => {
+                                        trackActivity({
+                                            action: 'TWO_WAY_DOWNLOAD_PATCH',
+                                            label: 'Download Patch',
+                                            details: `Title: ${diffContent.title}`
+                                        });
                                         const blob = new Blob([diffContent.patch], { type: 'text/sql' });
                                         const url = URL.createObjectURL(blob);
                                         const a = document.createElement('a');

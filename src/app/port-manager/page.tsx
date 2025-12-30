@@ -4,6 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, RefreshCw, XCircle, CheckCircle, Activity, Server, Hash, ShieldAlert } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 export default function PortManagerPage() {
     const [port, setPort] = useState("");
@@ -41,6 +42,7 @@ export default function PortManagerPage() {
         };
 
         worker.postMessage({ port: targetPort, checkUrl: '/api/system/port-manager/check' });
+        trackActivity({ action: "PORT_CHECK", label: targetPort });
     };
 
     const confirmKillProcess = () => {
@@ -65,6 +67,7 @@ export default function PortManagerPage() {
                 setMessage({ type: 'success', text: "Process terminated successfully." });
                 // Re-check port after 1 second
                 setTimeout(() => checkPort(port), 1000);
+                trackActivity({ action: "PORT_KILL_PROCESS", details: { pid: result.pid, name: result.processName } });
             } else {
                 setMessage({ type: 'error', text: data.error || "Failed to terminate process" });
             }
@@ -81,7 +84,7 @@ export default function PortManagerPage() {
         <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans p-6 flex flex-col items-center relative">
             {/* Header */}
             <div className="w-full max-w-2xl mb-8 flex items-center justify-between">
-                <Link href="/" className="flex items-center text-zinc-400 hover:text-white transition-colors">
+                <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Port Manager" })} className="flex items-center text-zinc-400 hover:text-white transition-colors">
                     <ArrowLeft className="w-5 h-5 mr-2" />
                     Back to Tools
                 </Link>

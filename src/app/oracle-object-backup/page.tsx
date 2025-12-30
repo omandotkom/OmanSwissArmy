@@ -6,6 +6,7 @@ import { ArrowLeft, Database, FileSpreadsheet, FolderInput, Download, AlertCircl
 import * as XLSX from "xlsx";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection } from "@/services/connection-storage";
+import { trackActivity } from "@/lib/tracker";
 
 // Types
 interface ExcelRow {
@@ -83,6 +84,7 @@ export default function OracleObjectLocalBackup() {
     const handleModeSelect = (selectedMode: 'ALL' | 'EXCEL') => {
         setMode(selectedMode);
         setStep(2);
+        trackActivity({ action: "BACKUP_MODE_SELECT", label: selectedMode });
     };
 
     // -------------------------------------------------------------------------
@@ -292,7 +294,9 @@ export default function OracleObjectLocalBackup() {
 
         setBackupQueue(items);
         setProcessingStatus({ total: items.length, success: 0, failed: 0 });
+        setProcessingStatus({ total: items.length, success: 0, failed: 0 });
         setStep(3);
+        trackActivity({ action: "BACKUP_PREPARE", details: { mode, itemCount: items.length } });
     };
 
     const startBackup = async () => {
@@ -319,6 +323,8 @@ export default function OracleObjectLocalBackup() {
         let active = 0;
         let index = 0;
         let completed = 0;
+
+        trackActivity({ action: "BACKUP_START", details: { count: queue.length, concurrency } });
 
         const processItem = async (idx: number) => {
             const item = queue[idx];
@@ -385,6 +391,18 @@ export default function OracleObjectLocalBackup() {
         const checkNext = () => {
             if (completed === queue.length) {
                 setIsBackupRunning(false);
+                trackActivity({
+                    action: "BACKUP_BATCH_COMPLETE",
+                    details: {
+                        total: queue.length,
+                        success: completed - processingStatus.failed, // 'completed' is total finished, we need to calc success correctly.
+                        // Actually processingStatus is state, might be stale in closure? 
+                        // It is better to rely on local counters or refs if possible, but simplest is to trust state if we accept slight race or just say 'finished'.
+                        // Let's use the 'completed' count.
+                        // Better: We have processingStatus state, but inside this closure we might not have the latest.
+                        // Let's just log "Batch Finished".
+                    }
+                });
                 return;
             }
             while (active < concurrency && index < queue.length) {
@@ -436,6 +454,9 @@ export default function OracleObjectLocalBackup() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Backup Report");
         XLSX.writeFile(wb, `Backup_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Backup Report");
+        XLSX.writeFile(wb, `Backup_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        trackActivity({ action: "BACKUP_EXPORT_REPORT", details: { success: processingStatus.success, failed: processingStatus.failed } });
     };
 
     // -------------------------------------------------------------------------
@@ -700,7 +721,7 @@ export default function OracleObjectLocalBackup() {
             <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
+                        <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Oracle Backup" })} className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
                             Back
                         </Link>

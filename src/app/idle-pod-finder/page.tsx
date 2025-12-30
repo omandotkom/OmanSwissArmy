@@ -6,6 +6,7 @@ import { ArrowLeft, RefreshCw, LogOut, Terminal, PowerOff, AlertCircle } from "l
 import { UserBadge } from "@/components/UserBadge";
 import { ProjectSelector } from "@/components/ProjectSelector";
 import { CheckCircle2, Search } from "lucide-react";
+import { trackActivity } from "@/lib/tracker";
 
 interface PodMetric {
     name: string;
@@ -58,13 +59,24 @@ export default function IdlePodFinderPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: loginCommand })
             });
-            if (res.ok) { setIsLoggedIn(true); checkLoginStatus(); }
-            else { const d = await res.json(); setLoginError(d.error || 'Login failed'); }
+            if (res.ok) {
+                setIsLoggedIn(true);
+                checkLoginStatus();
+                trackActivity({ action: "IDLE_POD_LOGIN", label: "Login Success" });
+            }
+            else {
+                const d = await res.json();
+                setLoginError(d.error || 'Login failed');
+                trackActivity({ action: "IDLE_POD_LOGIN_FAILED", details: { error: d.error } });
+            }
         } catch (e) { setLoginError("Network error"); } finally { setIsLoggingIn(false); }
     };
 
     useEffect(() => {
-        if (selectedProject) fetchPods();
+        if (selectedProject) {
+            fetchPods();
+            trackActivity({ action: "IDLE_POD_SELECT_PROJECT", label: selectedProject });
+        }
     }, [selectedProject]);
 
     const fetchPods = async () => {
@@ -91,8 +103,10 @@ export default function IdlePodFinderPage() {
                 }).sort((a, b) => a.cpuValue - b.cpuValue); // Sort lowest first
 
                 setPods(processed);
+                trackActivity({ action: "IDLE_POD_ANALYZE", label: selectedProject, details: { total: processed.length, idle: processed.filter(p => p.cpuValue <= threshold).length } });
             } else {
                 setError(data.error || "Failed to fetch metrics");
+                trackActivity({ action: "IDLE_POD_ANALYZE_FAILED", details: { error: data.error } });
             }
         } catch (e) {
             setError("Analysis failed. Metrics server might be down.");
@@ -139,7 +153,7 @@ export default function IdlePodFinderPage() {
         <div className="min-h-screen bg-slate-950 text-slate-100 p-8 font-sans">
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                    <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Idle Pod Finder" })} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                         <ArrowLeft size={24} />
                     </Link>
                     <div>
@@ -152,7 +166,7 @@ export default function IdlePodFinderPage() {
                 <div className="flex items-center gap-4">
                     {isLoggedIn && <UserBadge />}
                     <button
-                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); }}
+                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); trackActivity({ action: "CLICK_DISCONNECT", label: "Idle Pod Finder" }); }}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:border-red-500/50 rounded-lg text-slate-400 hover:text-red-400 transition-all"
                     >
                         <LogOut size={16} /> Disconnect

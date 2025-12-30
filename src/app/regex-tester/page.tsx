@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackActivity } from "@/lib/tracker";
 
 interface Match {
     index: number;
@@ -117,6 +118,7 @@ export default function RegexTester() {
     const handleFlagsChange = (val: string) => {
         setFlags(val);
         testRegex(regex, val, text);
+        trackActivity({ action: "REGEX_FLAGS_CHANGE", label: val });
     };
 
     const handleTextChange = (val: string) => {
@@ -130,6 +132,7 @@ export default function RegexTester() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Regex Tester</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "Regex Tester" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home

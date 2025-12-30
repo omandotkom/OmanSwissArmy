@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { ProjectSelector } from "@/components/ProjectSelector";
+import { trackActivity } from "@/lib/tracker";
 
 type Tab = 'pvc' | 'configmap' | 'secret';
 
@@ -101,6 +102,7 @@ export default function PvcAnalyzerPage() {
 
     const handleInspect = async (pvcName: string) => {
         setInspecting(pvcName);
+        trackActivity({ action: "CLUSTER_INSPECT_PVC", label: pvcName });
         try {
             const res = await fetch('/api/oc/inspect-pvc', {
                 method: 'POST',
@@ -117,6 +119,7 @@ export default function PvcAnalyzerPage() {
         } catch (e: any) {
             alert(`Failed to inspect: ${e.message}`);
             setInspecting(null);
+            trackActivity({ action: "PVC_INSPECT_FAILED", label: pvcName, details: { error: e.message } });
         }
     };
 
@@ -146,14 +149,21 @@ export default function PvcAnalyzerPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: loginCommand })
             });
-            if (res.ok) { setIsLoggedIn(true); checkLoginStatus(); }
-            else { const d = await res.json(); setLoginError(d.error || 'Login failed'); }
+            if (res.ok) {
+                setIsLoggedIn(true);
+                checkLoginStatus();
+                trackActivity({ action: "CLUSTER_LOGIN_SUCCESS" });
+            }
+            else { const d = await res.json(); setLoginError(d.error || 'Login failed'); trackActivity({ action: "CLUSTER_LOGIN_FAILED", label: d.error }); }
         } catch (e) { setLoginError("Network error"); } finally { setIsLoggingIn(false); }
     };
 
     // --- Data Fetching ---
     useEffect(() => {
-        if (selectedProject) fetchData();
+        if (selectedProject) {
+            fetchData();
+            trackActivity({ action: "PVC_ANALYZER_SELECT_PROJECT", label: selectedProject });
+        }
     }, [selectedProject]);
 
     const fetchData = async () => {
@@ -228,6 +238,7 @@ export default function PvcAnalyzerPage() {
             }
         }
         setIsScanningUsage(false);
+        trackActivity({ action: "CLUSTER_SCAN_USAGE", label: "Completed" });
     };
 
     // --- Filter Logic ---
@@ -300,7 +311,7 @@ export default function PvcAnalyzerPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                    <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Cluster Analyzer" })} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                         <ArrowLeft size={24} />
                     </Link>
                     <div>
@@ -316,7 +327,10 @@ export default function PvcAnalyzerPage() {
                         {['pvc', 'configmap', 'secret'].map((tab) => (
                             <button
                                 key={tab}
-                                onClick={() => setActiveTab(tab as Tab)}
+                                onClick={() => {
+                                    setActiveTab(tab as Tab);
+                                    trackActivity({ action: "CLUSTER_TAB_CHANGE", label: tab });
+                                }}
                                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
                             >
                                 {tab === 'pvc' && 'Persistent Volumes'}
@@ -341,7 +355,10 @@ export default function PvcAnalyzerPage() {
                     <ProjectSelector
                         projects={projects}
                         selectedProject={selectedProject}
-                        onSelect={setSelectedProject}
+                        onSelect={(p) => {
+                            setSelectedProject(p);
+                            trackActivity({ action: "CLUSTER_PROJECT_SELECT", label: p });
+                        }}
                         placeholder="Choose Project"
                     />
                 </div>                {/* Stats Cards */}
@@ -554,7 +571,7 @@ export default function PvcAnalyzerPage() {
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${pvc.status === 'Bound' ? 'bg-green-500/10 text-green-400' :
-                                                        pvc.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
+                                                    pvc.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
                                                     }`}>
                                                     {pvc.status}
                                                 </span>
@@ -566,7 +583,7 @@ export default function PvcAnalyzerPage() {
                                                         <Clock size={14} className="text-slate-500" /> {pvc.age}
                                                     </div>
                                                     <div className={`text-xs px-2 py-0.5 rounded-full w-fit ${pvc.reclaimPolicy === 'Delete' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                            pvc.reclaimPolicy === 'Retain' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500'
+                                                        pvc.reclaimPolicy === 'Retain' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-slate-500'
                                                         }`}>
                                                         {pvc.reclaimPolicy}
                                                     </div>

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { UserBadge } from "@/components/UserBadge";
 import { ProjectSelector } from "@/components/ProjectSelector";
+import { trackActivity } from "@/lib/tracker";
 
 interface Quota {
     name: string;
@@ -104,8 +105,16 @@ export default function ClusterDoctorPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command: loginCommand })
             });
-            if (res.ok) { setIsLoggedIn(true); checkLoginStatus(); }
-        } catch (e) { } finally { setIsLoggingIn(false); }
+            if (res.ok) {
+                setIsLoggedIn(true);
+                checkLoginStatus();
+                trackActivity({ action: "DOCTOR_LOGIN", label: "Login Success" });
+            } else {
+                trackActivity({ action: "DOCTOR_LOGIN_FAILED", label: "Login Failed" });
+            }
+        } catch (e) {
+            trackActivity({ action: "DOCTOR_LOGIN_FAILED", label: "Login Error" });
+        } finally { setIsLoggingIn(false); }
     };
     // ----------------------------
 
@@ -129,11 +138,14 @@ export default function ClusterDoctorPage() {
                 setQuotas(data.quotas || []);
                 setPendingPods(data.pendingPods || []);
                 setInfraIssues(data.infraIssues || []);
+                trackActivity({ action: "DOCTOR_DIAGNOSE_SUCCESS", label: selectedProject, details: { quotas: data.quotas?.length, issues: data.infraIssues?.length } });
             } else {
                 setError(data.error);
+                trackActivity({ action: "DOCTOR_DIAGNOSE_FAILED", label: selectedProject, details: { error: data.error } });
             }
-        } catch (e) {
+        } catch (e: any) {
             setError("Diagnosis failed");
+            trackActivity({ action: "DOCTOR_DIAGNOSE_FAILED", label: selectedProject, details: { error: e.message } });
         } finally {
             setLoading(false);
         }
@@ -149,6 +161,7 @@ export default function ClusterDoctorPage() {
                 setNodes(data.nodes || []);
                 setNodeError(data.nodeError || ""); // If permissions denied, we show this
                 setTopPods(data.pods || []);
+                trackActivity({ action: "DOCTOR_INFRA_SCAN", label: selectedProject, details: { nodes: data.nodes?.length } });
             }
         } catch (e) {
             console.error("Infra check failed");
@@ -196,7 +209,7 @@ export default function ClusterDoctorPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
+                    <Link href="/" onClick={() => trackActivity({ action: "CLICK_BACK", label: "Cluster Doctor" })} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                         <ArrowLeft size={24} />
                     </Link>
                     <div>
@@ -209,7 +222,7 @@ export default function ClusterDoctorPage() {
                 <div className="flex items-center gap-4">
                     {isLoggedIn && <UserBadge />}
                     <button
-                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); }}
+                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); trackActivity({ action: "CLICK_DISCONNECT", label: "Cluster Doctor" }); }}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:border-red-500/50 rounded-lg text-slate-400 hover:text-red-400 transition-all"
                     >
                         <LogOut size={16} /> Disconnect
