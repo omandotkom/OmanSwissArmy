@@ -172,6 +172,12 @@ export const toolGroups = [
                 description: "Generate type definitions from JSON.",
             },
             {
+                href: "/json-visualizer",
+                title: "JSON Visualizer",
+                description: "Visualize JSON data as interactive node diagrams.",
+                isNew: true,
+            },
+            {
                 href: "/number-to-words",
                 title: "Number to Words",
                 description: "Convert numbers to text in ID/EN.",
