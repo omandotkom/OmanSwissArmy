@@ -309,15 +309,15 @@ export default function PvcMigratorPage() {
                 if (!res.ok) throw new Error((await res.json()).error);
 
                 const json = await res.json();
-                
+
                 // If the step returned a specific audit strategy, log it explicitly
                 if (step.action === 'CHECK_CAPABILITIES' && json.strategy) {
-                     updateLastLog('success'); // Mark audit as done
-                     // Add the new line for strategy
-                     addLog(`📋 Planning migration : ${json.strategy}`, 'success');
+                    updateLastLog('success'); // Mark audit as done
+                    // Add the new line for strategy
+                    addLog(`📋 Planning migration : ${json.strategy}`, 'success');
                 } else if (json.message) {
                     // Update the running log with the server message if provided
-                     setLogs(prev => {
+                    setLogs(prev => {
                         const newLogs = [...prev];
                         if (newLogs.length > 0) {
                             newLogs[newLogs.length - 1].message = json.message;
@@ -458,13 +458,13 @@ export default function PvcMigratorPage() {
             <div className="flex items-center space-x-4 mb-8">
                 {[1, 2, 3].map(i => (
                     <div key={i} className={`flex items-center ${step >= i ? 'text-blue-600' : 'text-gray-400'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= i ? 'border-blue-600 bg-blue-100' : 'border-gray-300'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= i ? 'border-blue-600 bg-blue-100' : 'border-gray-600'}`}>
                             {i}
                         </div>
                         <span className="ml-2 font-medium">
                             {i === 1 ? 'Select Source' : i === 2 ? 'Configure' : 'Migrate'}
                         </span>
-                        {i < 3 && <div className="w-12 h-0.5 bg-gray-300 ml-4" />}
+                        {i < 3 && <div className="w-12 h-0.5 bg-gray-600 ml-4" />}
                     </div>
                 ))}
             </div>
@@ -483,7 +483,7 @@ export default function PvcMigratorPage() {
                     </div>
 
                     {project && (
-                        <div className="bg-white/5 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                        <div className="bg-white/5 p-6 rounded-xl border border-gray-800 shadow-sm">
                             <h2 className="text-xl font-semibold mb-4">Available PVCs</h2>
                             {loadingPvcs ? (
                                 <div className="text-center py-8 text-gray-500">Loading PVCs...</div>
@@ -500,7 +500,7 @@ export default function PvcMigratorPage() {
                                     </thead>
                                     <tbody>
                                         {pvcs.map(pvc => (
-                                            <tr key={pvc.name} className="hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                                            <tr key={pvc.name} className="hover:bg-white/5 transition-colors">
                                                 <td className="p-3 font-mono text-sm">{pvc.name}</td>
                                                 <td className="p-3">
                                                     <span className={`px-2 py-1 rounded text-xs ${pvc.status === 'Bound' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
@@ -532,14 +532,14 @@ export default function PvcMigratorPage() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                     <div className="grid grid-cols-2 gap-8">
                         {/* Source Info */}
-                        <div className="p-6 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-gray-800">
+                        <div className="p-6 bg-white/5 rounded-xl border border-gray-800">
                             <h3 className="text-lg font-semibold mb-4 text-gray-500">Source Configuration</h3>
                             <div className="space-y-3 font-mono text-sm">
                                 <div className="flex justify-between"><span>Namespace:</span> <span className="font-bold text-zinc-300">{project}</span></div>
                                 <div className="flex justify-between"><span>Name:</span> <span>{selectedPvc.name}</span></div>
                                 <div className="flex justify-between"><span>Capacity:</span> <span>{selectedPvc.capacity}</span></div>
                                 <div className="flex justify-between"><span>Old Class:</span> <span>{selectedPvc.storageClass}</span></div>
-                                <div className="mt-4 pt-4 border-t border-gray-700">
+                                <div className="mt-4 pt-4 border-t border-gray-800">
                                     <span className="block mb-2 text-gray-400">Attached Deployments:</span>
                                     {loadingDeps ? (
                                         <div className="animate-pulse h-4 bg-gray-700 rounded w-1/2"></div>
@@ -555,19 +555,19 @@ export default function PvcMigratorPage() {
                         </div>
 
                         {/* Target Config */}
-                        <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-blue-500/30 shadow-xl shadow-blue-500/10">
+                        <div className="p-6 bg-gray-900 rounded-xl border border-blue-500/30 shadow-xl shadow-blue-500/10">
                             <h3 className="text-lg font-semibold mb-4 text-blue-500">Target Configuration</h3>
 
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1">New Storage Class</label>
                                     <select
-                                        className="w-full bg-transparent border border-gray-600 rounded-lg p-2"
+                                        className="w-full bg-transparent border border-gray-600 rounded-lg p-2 text-white"
                                         value={targetSc}
                                         onChange={(e) => setTargetSc(e.target.value)}
                                     >
-                                        <option value="">Select Storage Class...</option>
-                                        {scList.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+                                        <option value="" className="text-black">Select Storage Class...</option>
+                                        {scList.map(sc => <option key={sc} value={sc} className="text-black">{sc}</option>)}
                                     </select>
                                 </div>
 
@@ -632,7 +632,7 @@ export default function PvcMigratorPage() {
                                     </div>
                                 </div>
 
-                                <div className={`p-4 border rounded-lg transition-colors ${deleteOldPvc ? 'bg-red-500/10 border-red-500' : 'bg-gray-100 dark:bg-white/5 border-gray-600'}`}>
+                                <div className={`p-4 border rounded-lg transition-colors ${deleteOldPvc ? 'bg-red-500/10 border-red-500' : 'bg-white/5 border-gray-600'}`}>
                                     <label className="flex items-start gap-3 cursor-pointer">
                                         <input
                                             type="checkbox"
@@ -704,7 +704,7 @@ export default function PvcMigratorPage() {
 
                     <div className="flex justify-end space-x-4">
                         {!isMigrating && logs.length === 0 && (
-                            <button onClick={() => setStep(2)} className="px-6 py-2 text-gray-500">Cancel</button>
+                            <button onClick={() => setStep(2)} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Cancel</button>
                         )}
                         <button
                             onClick={startMigration}
