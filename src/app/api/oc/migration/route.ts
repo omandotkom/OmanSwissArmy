@@ -23,6 +23,15 @@ export async function POST(request: Request) {
                 result = { deployments: deps };
                 break;
 
+            case 'FIND_ACTIVE_POD':
+                const podInfo = await migrator.findActivePodForPvc(namespace, pvcName);
+                if (podInfo) {
+                    result = { found: true, ...podInfo };
+                } else {
+                    result = { found: false, message: 'No active pod found mounting this PVC' };
+                }
+                break;
+
             case 'PREPARE_DESTINATION':
                 // Create new PVC
                 // capacity needs to be fetched from old logic or passed. 

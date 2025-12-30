@@ -1,12 +1,102 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import Link from 'next/link';
-import { ArrowLeft, RefreshCw, Terminal, LogOut } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Terminal, LogOut, GitBranch, Search, CheckCircle, AlertTriangle, Save, Copy, Folder, FileText, ChevronRight, ChevronDown } from 'lucide-react';
 import { UserBadge } from "@/components/UserBadge";
 import { trackActivity } from "@/lib/tracker";
+import { useToast, ToastContainer } from "@/components/ui/toast";
+
+import Editor, { DiffEditor } from "@monaco-editor/react";
+
+// --- FILE EXPLORER COMPONENTS ---
+interface FileNode {
+    name: string;
+    path: string;
+    type: 'file' | 'folder';
+    children?: FileNode[];
+}
+
+const buildFileTree = (paths: string[]): FileNode[] => {
+    const root: FileNode[] = [];
+    const addPath = (parts: string[], currentLevel: FileNode[], fullPath: string) => {
+        if (parts.length === 0) return;
+        const part = parts[0];
+        const isFile = parts.length === 1;
+
+        let existing = currentLevel.find(n => n.name === part);
+        if (!existing) {
+            existing = {
+                name: part,
+                path: isFile ? fullPath : '', // Only leaf nodes need full path tracking for now
+                type: isFile ? 'file' : 'folder',
+                children: isFile ? undefined : []
+            };
+            currentLevel.push(existing);
+        }
+
+        if (!isFile && existing.children) {
+            addPath(parts.slice(1), existing.children, fullPath);
+        }
+    };
+
+    paths.forEach(p => addPath(p.split('/'), root, p));
+
+    // Sort directories first
+    const sortNodes = (nodes: FileNode[]) => {
+        nodes.sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'folder' ? -1 : 1;
+        });
+        nodes.forEach(n => {
+            if (n.children) sortNodes(n.children);
+        });
+    };
+    sortNodes(root);
+    return root;
+};
+
+const FileTreeItem = ({ node, changedFiles, onSelect, activePath }: { node: FileNode, changedFiles: Set<string>, onSelect: (path: string) => void, activePath: string }) => {
+    const [isOpen, setIsOpen] = useState(true); // Default open for better visibility
+    const isChanged = node.type === 'file' && changedFiles.has(node.path);
+    const isActive = node.type === 'file' && node.path === activePath;
+    const hasChangedChild = node.type === 'folder' && node.children?.some(c => c.type === 'file' && changedFiles.has(c.path) || (c.type === 'folder' && /* deep check needed but simple for now */ true)); // Simple check
+
+    if (node.type === 'folder') {
+        return (
+            <div className="pl-2">
+                <div
+                    className="flex items-center gap-1 py-1 cursor-pointer hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    onClick={() => setIsOpen(!isOpen)}
+                >
+                    {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <Folder size={14} className="text-blue-400" />
+                    <span className="text-xs truncate">{node.name}</span>
+                </div>
+                {isOpen && node.children && (
+                    <div className="border-l border-gray-700 ml-1.5">
+                        {node.children.map((child, idx) => (
+                            <FileTreeItem key={idx} node={child} changedFiles={changedFiles} onSelect={onSelect} activePath={activePath} />
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div
+            onClick={() => onSelect(node.path)}
+            className={`flex items-center gap-2 py-1 pl-6 text-xs cursor-pointer transition-colors ${isActive ? 'bg-blue-600/20 text-blue-300 border-r-2 border-blue-500' : 'hover:bg-white/5 text-gray-500'} ${isChanged ? 'text-yellow-400 font-medium' : ''}`}
+        >
+            <FileText size={14} />
+            <span className="truncate">{node.name}</span>
+            {isChanged && <span className="w-2 h-2 rounded-full bg-yellow-500 ml-auto mr-2" title="Has Changes"></span>}
+        </div>
+    );
+};
+// ----------------------------
 
 interface PvcItem {
     name: string;
@@ -22,7 +112,20 @@ interface LogEntry {
     message: string;
 }
 
+interface ScanMatch {
+    file: string;
+    line: number;
+    content: string;
+    type: 'PVC_NAME' | 'STORAGE_CLASS';
+    contextId: number;
+    selected: boolean;
+    newContent?: string; // Calculated on frontend
+}
+
 export default function PvcMigratorPage() {
+    // Toast
+    const { toasts, addToast, removeToast } = useToast();
+
     // Auth State
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [checkingLogin, setCheckingLogin] = useState(true);
@@ -56,7 +159,142 @@ export default function PvcMigratorPage() {
     // Step 3 State (Execution)
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [isMigrating, setIsMigrating] = useState(false);
-    const [deploymentVolumeName, setDeploymentVolumeName] = useState(''); // Need to identify volume name, might need user input or auto-detect
+    const [deploymentVolumeName, setDeploymentVolumeName] = useState('');
+
+    // Git State
+    const [repoUrl, setRepoUrl] = useState('');
+    const [baseBranch, setBaseBranch] = useState('main');
+    const [gitUser, setGitUser] = useState('');
+    const [gitEmail, setGitEmail] = useState('');
+
+    // Load saved git details
+    useEffect(() => {
+        const savedUrl = localStorage.getItem('pvc_git_url');
+        if (savedUrl) setRepoUrl(savedUrl);
+
+        const savedUser = localStorage.getItem('pvc_git_user');
+        if (savedUser) setGitUser(savedUser);
+
+        const savedEmail = localStorage.getItem('pvc_git_email');
+        if (savedEmail) setGitEmail(savedEmail);
+    }, []);
+
+    // Load saved git details
+    useEffect(() => {
+        const savedUrl = localStorage.getItem('pvc_git_url');
+        if (savedUrl) setRepoUrl(savedUrl);
+
+        const savedUser = localStorage.getItem('pvc_git_user');
+        if (savedUser) setGitUser(savedUser);
+
+        const savedEmail = localStorage.getItem('pvc_git_email');
+        if (savedEmail) setGitEmail(savedEmail);
+    }, []);
+
+    // Save on change
+    useEffect(() => { localStorage.setItem('pvc_git_url', repoUrl) }, [repoUrl]);
+    useEffect(() => { localStorage.setItem('pvc_git_user', gitUser) }, [gitUser]);
+    useEffect(() => { localStorage.setItem('pvc_git_email', gitEmail) }, [gitEmail]);
+
+    const [branchMode, setBranchMode] = useState<'new' | 'existing'>('new');
+    const [isScanning, setIsScanning] = useState(false);
+    const [scanMatches, setScanMatches] = useState<ScanMatch[]>([]);
+    const [scanPath, setScanPath] = useState('');
+    const [fileList, setFileList] = useState<string[]>([]);
+    const [newBranchName, setNewBranchName] = useState('');
+    const [isPushing, setIsPushing] = useState(false);
+    const [pushResult, setPushResult] = useState<{ success: boolean, branch?: string, message?: string } | null>(null);
+
+    // Cleanup Logic
+    const cleanupTempResources = async (dir: string) => {
+        if (!dir) return;
+        try {
+            await fetch('/api/git/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tempDir: dir }),
+                keepalive: true
+            });
+            console.log('Cleaned up temp dir:', dir);
+        } catch (e) {
+            console.error('Cleanup failed:', e);
+        }
+    };
+
+    // Cleanup on Unmount or Change
+    useEffect(() => {
+        return () => {
+            if (scanPath) cleanupTempResources(scanPath);
+        };
+    }, [scanPath]);
+
+    // Editor State
+    const [activeFile, setActiveFile] = useState('');
+    const [fileContent, setFileContent] = useState('');
+    const [originalContent, setOriginalContent] = useState('');
+    const [modifiedContent, setModifiedContent] = useState('');
+    const [showDiff, setShowDiff] = useState(false);
+    const [isLoadingFile, setIsLoadingFile] = useState(false);
+
+    const handleFileSelect = async (path: string) => {
+        if (!path || path === activeFile) return;
+        setActiveFile(path);
+        setIsLoadingFile(true);
+        setFileContent('Loading...');
+        setOriginalContent('');
+        setModifiedContent('');
+        setShowDiff(false);
+
+        const fileMatches = scanMatches.filter(m => m.file === path);
+
+        trackActivity({ action: "GITOPS_VIEW_FILE", label: path, details: { changes: fileMatches.length } });
+
+        try {
+            // Fetch ORIGINAL content from temp repo
+            const res = await fetch('/api/git/read-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tempDir: scanPath, relativePath: path })
+            });
+            const data = await res.json();
+
+            if (data.content) {
+                const rawText = data.content;
+
+                if (fileMatches.length > 0) {
+                    // GENERATE MODIFIED CONTENT
+                    const lines = rawText.split(/\r?\n/);
+                    let changed = false;
+
+                    fileMatches.forEach(m => {
+                        const idx = m.line - 1;
+                        if (idx >= 0 && idx < lines.length && m.newContent !== undefined) {
+                            lines[idx] = m.newContent;
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        const finalText = lines.join('\n');
+                        setOriginalContent(rawText);
+                        setModifiedContent(finalText);
+                        setShowDiff(true);
+                        setFileContent(finalText); // Fallback
+                    } else {
+                        setFileContent(rawText);
+                    }
+                } else {
+                    setFileContent(rawText);
+                }
+            } else {
+                setFileContent('Error loading file');
+            }
+        } catch (e) {
+            setFileContent('Error loading file');
+        } finally {
+            setIsLoadingFile(false);
+        }
+    };
 
     useEffect(() => {
         checkLoginStatus();
@@ -370,10 +608,137 @@ export default function PvcMigratorPage() {
             updateLastLog('error');
             // Add a specific error log entry so user sees it in the timeline
             addLog(`FAILED: ${e.message}`, 'error');
-            alert(`Migration Failed: ${e.message}`);
+            addToast(`Migration Failed: ${e.message}`, 'error');
             trackActivity({ action: "MIGRATION_FAILED", label: e.message });
         } finally {
             setIsMigrating(false);
+        }
+    };
+
+    // ----- STEP 4: GITOPS LOGIC -----
+
+    const handleScanRepo = async () => {
+        if (!repoUrl) return;
+        setIsScanning(true);
+        setScanMatches([]);
+        trackActivity({ action: "GITOPS_SCAN_START", label: repoUrl }); // TRACKING ADDED
+        try {
+            const res = await fetch('/api/git/ops-pvc-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repoUrl,
+                    branch: baseBranch,
+                    oldPvcName: selectedPvc?.name,
+                    oldStorageClass: selectedPvc?.storageClass
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            // Pre-calculate new content for UI
+            const matchesWithFixes = (data.matches || []).map((m: any) => {
+                let newContent = m.content;
+                // Replace logic
+                if (m.type === 'PVC_NAME') {
+                    newContent = m.content.replace(selectedPvc?.name, targetPvcName);
+                } else if (m.type === 'STORAGE_CLASS') {
+                    // Replace old class with new class
+                    // Need to be careful to only replace the value part? Simple replace should be safe if the string is distinctive
+                    // Assuming standard yaml: 'storageClass: old' -> 'storageClass: new'
+                    newContent = m.content.replace(selectedPvc?.storageClass, targetSc);
+                }
+                return { ...m, selected: true, newContent };
+            });
+
+            setScanMatches(matchesWithFixes);
+            if (data.tempDir) setScanPath(data.tempDir);
+            if (data.allFiles) setFileList(data.allFiles);
+            trackActivity({ action: "GITOPS_SCAN_SUCCESS", label: `Found ${matchesWithFixes.length} matches` }); // TRACKING ADDED
+
+            if (matchesWithFixes.length === 0) {
+                addToast("Scan complete. No matches found.", "error");
+            } else {
+                addToast(`Scan complete. Found ${matchesWithFixes.length} matches.`);
+            }
+        } catch (e: any) {
+            addToast(`Scan failed: ${e.message}`, 'error');
+            trackActivity({ action: "GITOPS_SCAN_FAILED", label: e.message }); // TRACKING ADDED
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    const handlePushFixes = async () => {
+        const fixesToPush = scanMatches.filter(m => m.selected).map(m => ({
+            file: m.file,
+            line: m.line,
+            type: m.type,
+            originalContent: m.content,
+            newContent: m.newContent
+        }));
+
+        if (fixesToPush.length === 0) return;
+
+        setIsPushing(true);
+        trackActivity({ action: "GITOPS_PUSH_START", label: `Committing ${fixesToPush.length} changes` }); // TRACKING ADDED
+        try {
+            const res = await fetch('/api/git/ops-pvc-push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repoUrl,
+                    baseBranch,
+                    fixes: fixesToPush,
+                    branch: newBranchName || undefined, // Send if set
+                    branchMode, // 'new' or 'existing'
+                    authorName: gitUser || 'Oman Swiss Army Bot',
+                    authorEmail: gitEmail || 'bot@omansmissarmy.tool',
+                    message: `chore: migrate PVC ${selectedPvc?.name} to ${targetPvcName} (${targetSc})`
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            setPushResult({
+                success: true,
+                branch: data.branch,
+                message: data.message
+            });
+            trackActivity({ action: "GITOPS_PUSH_SUCCESS", label: "Push Completed", details: { branch: data.branch } }); // TRACKING ADDED
+        } catch (e: any) {
+            setPushResult({ success: false, message: e.message });
+            trackActivity({ action: "GITOPS_PUSH_FAILED", label: e.message }); // TRACKING ADDED
+        } finally {
+            setIsPushing(false);
+        }
+    };
+
+    // INSPECT PVC LOGIC
+    const handleInspectPvc = async (pvc: any) => {
+        addToast("Finding active pod...", "success");
+        try {
+            const res = await fetch('/api/oc/migration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'FIND_ACTIVE_POD',
+                    namespace: project,
+                    pvcName: pvc.name
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.found) {
+                const url = `/pvc-browser?project=${project}&pod=${data.podName}&path=${encodeURIComponent(data.mountPath)}`;
+                window.open(url, '_blank');
+                trackActivity({ action: "INSPECT_PVC_SUCCESS", label: pvc.name, details: { pod: data.podName } });
+            } else {
+                addToast(data.message || "No active pod found mounting this PVC.", "error");
+                trackActivity({ action: "INSPECT_PVC_NO_POD", label: pvc.name });
+            }
+        } catch (e) {
+            addToast("Failed to inspect PVC", "error");
         }
     };
 
@@ -413,8 +778,44 @@ export default function PvcMigratorPage() {
         );
     }
 
+    // DEV: Bypass Logic
+    const isDev = process.env.NODE_ENV === 'development';
+    const handleDevJump = () => {
+        // Prompt 1: OLD PVC (Search Anchor)
+        const testPvcName = window.prompt("1. Enter OLD PVC Name (Anchor to search in Git):", "gass-app-logs");
+        if (!testPvcName) return;
+
+        // Prompt 2: NEW PVC (Replacement)
+        const newPvcName = window.prompt("2. Enter NEW PVC Name (Replacement):", `${testPvcName}-new`);
+        if (!newPvcName) return;
+
+        // Prompt 3: NEW Storage Class
+        const newScName = window.prompt("3. Enter NEW Storage Class:", "ocs-storagecluster-cephfs");
+        if (!newScName) return;
+
+        setProject('dev-project');
+        // Use the input names
+        setSelectedPvc({ name: testPvcName, status: 'Bound', capacity: '10Gi', storageClass: 'gp2', accessModes: ['RWO'] });
+        setTargetPvcName(newPvcName);
+        setTargetSc(newScName);
+        setStep(4);
+        trackActivity({ action: "DEV_BYPASS_GITOPS", label: "Jumped to Step 4" });
+    };
+
     return (
         <div className="min-h-screen bg-slate-900 text-slate-100 p-8 space-y-8 relative">
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
+            {/* DEV BUTTON */}
+            {isDev && (
+                <div className="absolute top-4 right-4 z-50">
+                    <button
+                        onClick={handleDevJump}
+                        className="px-3 py-1 bg-purple-900/50 border border-purple-500 text-purple-200 text-xs rounded hover:bg-purple-800 transition-colors"
+                    >
+                        🐛 DEV: Jump to GitOps
+                    </button>
+                </div>
+            )}
             {/* Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -477,15 +878,15 @@ export default function PvcMigratorPage() {
 
             {/* Step Indicator */}
             <div className="flex items-center space-x-4 mb-8">
-                {[1, 2, 3].map(i => (
+                {[1, 2, 3, 4].map(i => (
                     <div key={i} className={`flex items-center ${step >= i ? 'text-blue-600' : 'text-gray-400'}`}>
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= i ? 'border-blue-600 bg-blue-100' : 'border-gray-600'}`}>
                             {i}
                         </div>
                         <span className="ml-2 font-medium">
-                            {i === 1 ? 'Select Source' : i === 2 ? 'Configure' : 'Migrate'}
+                            {i === 1 ? 'Select Source' : i === 2 ? 'Configure' : i === 3 ? 'Migrate' : 'Update Repo'}
                         </span>
-                        {i < 3 && <div className="w-12 h-0.5 bg-gray-600 ml-4" />}
+                        {i < 4 && <div className="w-12 h-0.5 bg-gray-600 ml-4" />}
                     </div>
                 ))}
             </div>
@@ -530,13 +931,22 @@ export default function PvcMigratorPage() {
                                                 </td>
                                                 <td className="p-3">{pvc.capacity}</td>
                                                 <td className="p-3 text-gray-500">{pvc.storageClass}</td>
-                                                <td className="p-3">
+                                                <td className="p-3 flex items-center gap-2">
                                                     <button
                                                         onClick={() => { handlePvcSelect(pvc); setStep(2); trackActivity({ action: "CLICK_PVC_SELECT", label: pvc.name }); }}
                                                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-all shadow-lg shadow-blue-500/30"
                                                     >
                                                         Select
                                                     </button>
+                                                    {pvc.status === 'Bound' && (
+                                                        <button
+                                                            onClick={() => handleInspectPvc(pvc)}
+                                                            className="p-2 bg-zinc-700 hover:bg-zinc-600 text-blue-300 rounded-lg transition-colors border border-zinc-600"
+                                                            title="Inspect Content (PVC Browser)"
+                                                        >
+                                                            <Search size={16} />
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -725,17 +1135,339 @@ export default function PvcMigratorPage() {
 
                     <div className="flex justify-end space-x-4">
                         {!isMigrating && logs.length === 0 && (
-                            <button onClick={() => { setStep(2); trackActivity({ action: "CANCEL_PRESIGN_OFF", label: "Cancel Step 3" }); }} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Cancel</button>
+                            <button onClick={() => { setStep(2); trackActivity({ action: "CANCEL_STEP_3", label: "Back to Config" }); }} className="px-6 py-2 text-gray-500 hover:text-white transition-colors">Cancel</button>
                         )}
-                        <button
-                            onClick={startMigration}
-                            disabled={isMigrating || logs.length > 0}
-                            className={`px-8 py-3 rounded-xl font-bold text-white shadow-xl transition-all
-                                ${isMigrating ? 'bg-gray-600 cursor-wait' :
-                                    logs.some(l => l.status === 'success') ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'}`}
-                        >
-                            {isMigrating ? 'Migrating...' : logs.length > 0 ? 'Migration Completed' : 'START MIGRATION'}
-                        </button>
+
+                        {/* Go to Step 4 Button (Appears after success) */}
+                        {logs.some(l => l.message.includes('Migration Completed')) && (
+                            <button
+                                onClick={() => setStep(4)}
+                                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-xl transition-all flex items-center gap-2"
+                            >
+                                <GitBranch size={20} />
+                                Next: Update Git Repo
+                            </button>
+                        )}
+
+                        {/* Start Button */}
+                        {!logs.some(l => l.message.includes('Migration Completed')) && (
+                            <button
+                                onClick={startMigration}
+                                disabled={isMigrating || logs.length > 0}
+                                className={`px-8 py-3 rounded-xl font-bold text-white shadow-xl transition-all
+                                    ${isMigrating ? 'bg-gray-600 cursor-wait' :
+                                        logs.some(l => l.status === 'success') ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'}`}
+                            >
+                                {isMigrating ? 'Migrating...' : logs.length > 0 ? 'Migration Completed' : 'START MIGRATION'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* STEP 4: GITOPS UPDATE */}
+            {step === 4 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="bg-slate-800/50 p-6 rounded-xl border border-indigo-500/30">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+                                <GitBranch className="text-indigo-400" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white">Update Deployment Repository</h3>
+                                <p className="text-gray-400 text-sm">
+                                    Sync the changes to your GitOps repository to prevent rollback on next deployment.
+                                    <br />
+                                    We will find occurances of <strong>{selectedPvc?.name}</strong> and update them to <strong>{targetPvcName}</strong> (and update storage class to <strong>{targetSc}</strong>).
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Input Form */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Git Repository URL</label>
+                                <input
+                                    type="text"
+                                    value={repoUrl}
+                                    onChange={e => setRepoUrl(e.target.value)}
+                                    placeholder="https://gitlab.com/company/repo.git"
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-mono"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Base Branch</label>
+                                <input
+                                    type="text"
+                                    value={baseBranch}
+                                    onChange={e => setBaseBranch(e.target.value)}
+                                    placeholder="main"
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-mono"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Author Info */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 pt-4 border-t border-slate-700/50">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Git Author Name</label>
+                                <input
+                                    type="text"
+                                    value={gitUser}
+                                    onChange={e => setGitUser(e.target.value)}
+                                    placeholder="e.g. John Doe"
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Git Author Email</label>
+                                <input
+                                    type="text"
+                                    value={gitEmail}
+                                    onChange={e => setGitEmail(e.target.value)}
+                                    placeholder="e.g. john@company.com"
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Scan Button */}
+                        {scanMatches.length === 0 && !pushResult && (
+                            <button
+                                onClick={handleScanRepo}
+                                disabled={isScanning || !repoUrl}
+                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isScanning ? <RefreshCw className="animate-spin" size={18} /> : <Search size={18} />}
+                                {isScanning ? 'Cloning & Scanning...' : 'Scan Repository'}
+                            </button>
+                        )}
+
+                        {/* Results Area */}
+                        {(fileList.length > 0 || scanMatches.length > 0) && !pushResult && (
+                            <div className="flex flex-col md:flex-row gap-6 h-[600px]">
+                                {/* LEFT: FILE EXPLORER */}
+                                <div className="w-full md:w-64 shrink-0 flex flex-col bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                    <div className="p-3 bg-slate-800 border-b border-slate-700 text-xs font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
+                                        Explorer
+                                        <span className="bg-slate-700 text-slate-300 px-1.5 rounded">{fileList.length} files</span>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-2">
+                                        {/* Render Tree */}
+                                        {(() => {
+                                            const tree = buildFileTree(fileList);
+                                            const changedSet = new Set(scanMatches.map(m => m.file));
+                                            return tree.map((node, i) => (
+                                                <FileTreeItem
+                                                    key={i}
+                                                    node={node}
+                                                    changedFiles={changedSet}
+                                                    onSelect={handleFileSelect}
+                                                    activePath={activeFile}
+                                                />
+                                            ));
+                                        })()}
+                                    </div>
+                                </div>
+
+                                {/* RIGHT: EDITOR / CHANGES */}
+                                <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                                    {scanPath && (
+                                        <div className="flex items-center gap-2 p-2 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-gray-500 overflow-hidden shrink-0">
+                                            <span className="shrink-0 text-gray-600">Scan Source:</span>
+                                            <span className="truncate flex-1">{scanPath}</span>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(scanPath);
+                                                    trackActivity({ action: "GITOPS_COPY_PATH", label: "Copied Scan Path" });
+                                                    addToast("Path copied to clipboard!");
+                                                }}
+                                                className="p-1 hover:text-white transition-colors"
+                                                title="Copy Path"
+                                            >
+                                                <Copy size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Replacement Plan Legend */}
+                                    <div className="grid grid-cols-2 gap-4 bg-indigo-900/20 p-4 rounded-lg border border-indigo-500/20 text-sm shrink-0">
+                                        <div>
+                                            <div className="text-xs text-indigo-300 uppercase font-bold tracking-wider mb-2">Replacements Strategy</div>
+                                            <div className="space-y-2 font-mono">
+                                                <div>
+                                                    <span className="text-gray-500 text-xs block">PVC Name:</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-red-400 bg-red-900/20 px-1 rounded line-through decoration-red-500">{selectedPvc?.name}</span>
+                                                        <span className="text-gray-500">➔</span>
+                                                        <span className="text-green-400 bg-green-900/20 px-1 rounded font-bold">{targetPvcName}</span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-500 text-xs block">Storage Class:</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-red-400 bg-red-900/20 px-1 rounded line-through decoration-red-500">{selectedPvc?.storageClass}</span>
+                                                        <span className="text-gray-500">➔</span>
+                                                        <span className="text-green-400 bg-green-900/20 px-1 rounded font-bold">{targetSc}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-gray-400 border-l border-indigo-500/20 pl-4 flex flex-col justify-center">
+                                            <p>
+                                                <span className="text-indigo-400 font-bold">INFO:</span> We use smart contextual search. The Storage Class will only be replaced if it appears near the PVC Name (within 15 lines).
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 bg-black/30 rounded-lg border border-gray-700 overflow-hidden flex flex-col relative">
+                                        <div className="p-2 bg-slate-800 border-b border-gray-700 text-xs font-bold text-gray-400 flex justify-between items-center">
+                                            <span>
+                                                {activeFile ? activeFile : 'SELECT A FILE TO VIEW'}
+                                                {activeFile && scanMatches.some(m => m.file === activeFile) && <span className="ml-2 text-yellow-500 text-[10px]">(MODIFIED PREVIEW)</span>}
+                                            </span>
+                                            {activeFile && (
+                                                <span className="text-[10px] uppercase">{activeFile.split('.').pop()?.toUpperCase()}</span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 relative">
+                                            {activeFile ? (
+                                                isLoadingFile ? (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                                                        <RefreshCw className="animate-spin mb-2" />
+                                                    </div>
+                                                ) : (
+                                                    showDiff ? (
+                                                        <DiffEditor
+                                                            height="100%"
+                                                            language={activeFile.endsWith('.json') ? 'json' : (activeFile.endsWith('.ts') ? 'typescript' : 'yaml')}
+                                                            original={originalContent}
+                                                            modified={modifiedContent}
+                                                            theme="vs-dark"
+                                                            options={{
+                                                                padding: { top: 16 },
+                                                                minimap: { enabled: false },
+                                                                fontSize: 12,
+                                                                readOnly: true,
+                                                                scrollBeyondLastLine: false,
+                                                                renderSideBySide: true, // Side by side diff
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <Editor
+                                                            height="100%"
+                                                            defaultLanguage="yaml"
+                                                            language={activeFile.endsWith('.json') ? 'json' : (activeFile.endsWith('.ts') ? 'typescript' : 'yaml')}
+                                                            value={fileContent}
+                                                            theme="vs-dark"
+                                                            options={{
+                                                                padding: { top: 16 },
+                                                                minimap: { enabled: false },
+                                                                fontSize: 12,
+                                                                readOnly: true,
+                                                                scrollBeyondLastLine: false,
+                                                            }}
+                                                        />
+                                                    )
+                                                )
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600">
+                                                    <Search size={48} className="mb-4 opacity-20" />
+                                                    <p>Select a file from the explorer to preview changes</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 shrink-0 border-t border-slate-700 pt-3">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-[10px] text-gray-500 font-bold uppercase">Target Branch Strategy</label>
+                                            <div className="flex bg-slate-800 rounded p-0.5 border border-slate-700">
+                                                <button
+                                                    onClick={() => setBranchMode('new')}
+                                                    className={`px-2 py-0.5 text-[10px] rounded ${branchMode === 'new' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                                >
+                                                    New Branch
+                                                </button>
+                                                <button
+                                                    onClick={() => setBranchMode('existing')}
+                                                    className={`px-2 py-0.5 text-[10px] rounded ${branchMode === 'existing' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                                >
+                                                    Existing
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <input
+                                                type="text"
+                                                value={newBranchName}
+                                                onChange={e => setNewBranchName(e.target.value)}
+                                                placeholder={branchMode === 'new' ? `migrate-${selectedPvc?.name || 'pvc'}` : 'e.g. feature/my-branch'}
+                                                className={`flex-1 bg-slate-900 border ${branchMode === 'existing' ? 'border-yellow-600/50 focus:ring-yellow-500' : 'border-slate-600 focus:ring-green-500'} rounded-lg p-2 text-sm font-mono text-white placeholder-gray-600 focus:ring-1 outline-none transition-colors`}
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    setScanMatches([]); // Reset to scan again
+                                                    setFileList([]);
+                                                    setActiveFile('');
+                                                    setScanPath(''); // Triggers cleanup via useEffect
+                                                    trackActivity({ action: "GITOPS_RESCAN", label: "Reset Scan" });
+                                                }}
+                                                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors"
+                                            >
+                                                Rescan
+                                            </button>
+                                            <button
+                                                onClick={handlePushFixes}
+                                                disabled={isPushing || scanMatches.filter(m => m.selected).length === 0}
+                                                className="flex-1 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {isPushing ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                                                {isPushing ? 'Committing & Pushing...' : `Push Updates`}
+                                            </button>
+                                        </div>
+                                        {branchMode === 'existing' && (
+                                            <p className="text-[10px] text-yellow-500/80 mt-1">
+                                                ⚠️ Warning: You are pushing directly to an existing branch. Ensure you have pulled latest changes.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Success View */}
+                        {pushResult && (
+                            <div className={`p-6 rounded-xl border ${pushResult.success ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'} flex flex-col items-center text-center space-y-4`}>
+                                {pushResult.success ? (
+                                    <>
+                                        <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center text-green-400">
+                                            <CheckCircle size={28} />
+                                        </div>
+                                        <h4 className="text-xl font-bold text-white">Update Pushed Successfully!</h4>
+                                        <p className="text-gray-300">
+                                            Changes have been pushed to branch: <br />
+                                            <span className="font-mono text-green-300 bg-slate-900 px-2 py-1 rounded mt-2 inline-block">{pushResult.branch}</span>
+                                        </p>
+                                        <div className="pt-4">
+                                            <a href={repoUrl.replace('.git', '') + '/merge_requests/new'} target="_blank" className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium inline-flex items-center gap-2">
+                                                Create Pull Request ↗
+                                            </a>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center text-red-400">
+                                            <AlertTriangle size={28} />
+                                        </div>
+                                        <h4 className="text-xl font-bold text-white">Push Failed</h4>
+                                        <p className="text-red-300">{pushResult.message}</p>
+                                        <button onClick={() => setPushResult(null)} className="text-sm text-gray-400 underline">Try Again</button>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

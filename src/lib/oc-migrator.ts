@@ -193,4 +193,35 @@ spec:
       return null;
     }
   }
+  async findActivePodForPvc(namespace: string, pvcName: string) {
+    try {
+      // Get all pods in namespace
+      const podsJson = await this.runCommand(['get', 'pods', `-n ${namespace}`, '--field-selector=status.phase=Running', '-o json']);
+      const pods = JSON.parse(podsJson).items || [];
+
+      for (const pod of pods) {
+        // Find volume definition
+        const vol = pod.spec.volumes?.find((v: any) => v.persistentVolumeClaim?.claimName === pvcName);
+        if (vol) {
+          // Find mount path in first container
+          // Correct logic: iterating containers to find volumeMount match
+          const containers = pod.spec.containers || [];
+          for (const c of containers) {
+            const mount = c.volumeMounts?.find((m: any) => m.name === vol.name);
+            if (mount) {
+              return {
+                podName: pod.metadata.name,
+                volumeName: vol.name,
+                mountPath: mount.mountPath
+              };
+            }
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error("Error finding pod for PVC", e);
+      return null;
+    }
+  }
 }
