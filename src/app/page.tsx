@@ -7,6 +7,7 @@ import { toolGroups } from "@/data/tools";
 import { useAiSearch } from "@/hooks/useAiSearch";
 import { trackActivity } from "@/lib/tracker";
 import ConnectionManager from "@/components/ConnectionManager";
+import UpdateChecker from "@/components/UpdateChecker";
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -362,12 +363,16 @@ export default function Home() {
                   />
                 )}
 
-                {(activeSetting === "ai-models" || activeSetting === "export" || activeSetting === "update") && (
+                {(activeSetting === "ai-models" || activeSetting === "export") && (
                   <div className="flex flex-col items-center justify-center h-full text-zinc-500 bg-zinc-900/20">
                     <Sparkles className="w-12 h-12 mb-4 opacity-20" />
                     <h4 className="text-xl font-medium text-zinc-400 mb-2">Coming Soon</h4>
                     <p className="text-sm">This feature is currently under development.</p>
                   </div>
+                )}
+
+                {activeSetting === "update" && (
+                  <UpdateChecker currentVersion={process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0"} />
                 )}
 
                 {activeSetting === "about" && (

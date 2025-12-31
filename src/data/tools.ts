@@ -13,12 +13,7 @@ export const toolGroups = [
                 description: "Simulate merge and detect conflicts without merging.",
                 isNew: true,
             },
-            {
-                href: "/port-manager",
-                title: "Port Manager",
-                description: "Check port usage and kill blocking processes.",
-                platforms: ["win32"],
-            },
+
             {
                 href: "/ssl-decoder",
                 title: "SSL Decoder",
@@ -272,6 +267,12 @@ export const toolGroups = [
                 title: "Network Port Scanner",
                 description: "Scan common ports on a target host IP.",
                 isNew: true,
+            },
+            {
+                href: "/port-manager",
+                title: "Port Manager",
+                description: "Check port usage and kill blocking processes.",
+                platforms: ["win32"],
             },
         ]
     },
