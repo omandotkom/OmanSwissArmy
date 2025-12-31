@@ -4,6 +4,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ActivityTracker from "@/components/ActivityTracker";
 
+import GlobalErrorTracker from "@/components/GlobalErrorTracker";
+
+import ProductionConsoleSilencer from "@/components/ProductionConsoleSilencer";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,10 +33,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ProductionConsoleSilencer />
         <Suspense fallback={null}>
           <ActivityTracker />
         </Suspense>
-        {children}
+        <GlobalErrorTracker>
+          {children}
+        </GlobalErrorTracker>
       </body>
     </html>
   );

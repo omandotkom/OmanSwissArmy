@@ -40,8 +40,13 @@ self.onmessage = async (e: MessageEvent) => {
             break;
 
         case "TRACK":
-            if (!db) initFirebase(); // Jaga-jaga
+            if (!db) initFirebase();
             await handleTrack(payload);
+            break;
+
+        case "TRACK_ERROR":
+            if (!db) initFirebase();
+            await handleTrackError(payload);
             break;
     }
 };
@@ -69,5 +74,26 @@ const handleTrack = async (log: any) => {
         // Kalau gagal karena offline, firestore otomatis retry nanti (karena persistence).
         // Kalau gagal karena block/rules, ya sudah nasib.
         if (isDev) console.error("Worker: Failed to write", error);
+    }
+};
+
+// 4. Logika Simpan Error
+const handleTrackError = async (log: any) => {
+    // Mode Dev: Tetap log ke console agar kelihatan
+    if (isDev) {
+        console.error(`🔥 [ErrorLog] [${currentUser}]`, log.message, log);
+        return;
+    }
+
+    // Mode Prod: Kirim ke Firestore
+    try {
+        await addDoc(collection(db, "errorLogs"), {
+            ...log,
+            user: currentUser, // Username user yang aktif
+            timestamp: serverTimestamp(), // Waktu Server
+            clientTime: new Date().toISOString() // Waktu Client
+        });
+    } catch (error) {
+        if (isDev) console.error("Worker: Failed to write error log", error);
     }
 };

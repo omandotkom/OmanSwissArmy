@@ -57,6 +57,32 @@ export const trackActivity = (log: ActivityLogInput) => {
 };
 
 /**
+ * Merekam ERROR aplikasi ke Firestore via Worker
+ */
+export const trackError = (error: Error, info?: any) => {
+    try {
+        const worker = getWorker();
+        if (!worker) return;
+
+        const currentPath = window.location.pathname;
+
+        worker.postMessage({
+            type: 'TRACK_ERROR',
+            payload: {
+                message: error.message || 'Unknown Error',
+                stack: error.stack,
+                componentStack: info?.componentStack, // Dari React Error Boundary
+                path: currentPath,
+                appVersion: "1.0.0",
+                userAgent: navigator.userAgent // Info Browser duplicate but useful for quick debug
+            }
+        });
+    } catch (e) {
+        // Silent
+    }
+};
+
+/**
  * Mengambil username sistem dan mengirim ke worker
  * Dipanggil sekali saat aplikasi start
  */

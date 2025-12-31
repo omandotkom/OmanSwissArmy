@@ -264,4 +264,16 @@ export const toolGroups = [
             },
         ],
     },
+    {
+        name: "Networking",
+        items: [
+            {
+                href: "/network-scanner",
+                title: "Network Port Scanner",
+                description: "Scan common ports on a target host IP.",
+                isNew: true,
+            },
+        ]
+    },
 ];
+
