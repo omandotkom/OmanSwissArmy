@@ -1,4 +1,18 @@
-export const toolGroups = [
+export interface ToolItem {
+    href: string;
+    title: string;
+    description: string;
+    isNew?: boolean;
+    dependency?: string;
+    platforms?: string[];
+}
+
+export interface ToolGroup {
+    name: string;
+    items: ToolItem[];
+}
+
+export const toolGroups: ToolGroup[] = [
     {
         name: "Development & Utils",
         items: [
