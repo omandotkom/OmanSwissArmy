@@ -1380,32 +1380,56 @@ export default function PvcMigratorPage() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-2 shrink-0 border-t border-slate-700 pt-3">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <label className="text-[10px] text-gray-500 font-bold uppercase">Target Branch Strategy</label>
-                                            <div className="flex bg-slate-800 rounded p-0.5 border border-slate-700">
-                                                <button
-                                                    onClick={() => setBranchMode('new')}
-                                                    className={`px-2 py-0.5 text-[10px] rounded ${branchMode === 'new' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                                                >
-                                                    New Branch
-                                                </button>
-                                                <button
-                                                    onClick={() => setBranchMode('existing')}
-                                                    className={`px-2 py-0.5 text-[10px] rounded ${branchMode === 'existing' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                                                >
-                                                    Existing
-                                                </button>
+                                    <div className="flex flex-col gap-3 shrink-0 border-t border-slate-700 pt-3">
+                                        <div className="flex flex-col gap-2 mb-1">
+                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Push Strategy</span>
+                                            <div className="flex items-center gap-6">
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${branchMode === 'new' ? 'border-blue-500 bg-blue-500/20' : 'border-gray-600 group-hover:border-gray-500'}`}>
+                                                        {branchMode === 'new' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                                                    </div>
+                                                    <input
+                                                        type="radio"
+                                                        name="branchMode"
+                                                        className="hidden"
+                                                        checked={branchMode === 'new'}
+                                                        onChange={() => { setBranchMode('new'); setNewBranchName(''); }}
+                                                    />
+                                                    <span className={`text-sm ${branchMode === 'new' ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>Create New Branch (PR)</span>
+                                                </label>
+
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${branchMode === 'existing' ? 'border-yellow-500 bg-yellow-500/20' : 'border-gray-600 group-hover:border-gray-500'}`}>
+                                                        {branchMode === 'existing' && <div className="w-2 h-2 rounded-full bg-yellow-500" />}
+                                                    </div>
+                                                    <input
+                                                        type="radio"
+                                                        name="branchMode"
+                                                        className="hidden"
+                                                        checked={branchMode === 'existing'}
+                                                        onChange={() => { setBranchMode('existing'); setNewBranchName(baseBranch); }}
+                                                    />
+                                                    <span className={`text-sm ${branchMode === 'existing' ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>
+                                                        Direct Commit to <span className="font-mono text-yellow-500">{baseBranch || 'Branch'}</span>
+                                                    </span>
+                                                </label>
                                             </div>
                                         </div>
+
                                         <div className="flex gap-4">
-                                            <input
-                                                type="text"
-                                                value={newBranchName}
-                                                onChange={e => setNewBranchName(e.target.value)}
-                                                placeholder={branchMode === 'new' ? `migrate-${selectedPvc?.name || 'pvc'}` : 'e.g. feature/my-branch'}
-                                                className={`flex-1 bg-slate-900 border ${branchMode === 'existing' ? 'border-yellow-600/50 focus:ring-yellow-500' : 'border-slate-600 focus:ring-green-500'} rounded-lg p-2 text-sm font-mono text-white placeholder-gray-600 focus:ring-1 outline-none transition-colors`}
-                                            />
+                                            <div className="flex-1 relative">
+                                                <input
+                                                    type="text"
+                                                    value={newBranchName}
+                                                    onChange={e => setNewBranchName(e.target.value)}
+                                                    placeholder={branchMode === 'new' ? `migrate-${selectedPvc?.name || 'pvc'}-${Date.now().toString().slice(-4)}` : baseBranch}
+                                                    className={`w-full bg-slate-900 border rounded-lg p-2 text-sm font-mono text-white placeholder-gray-600 focus:ring-1 outline-none transition-colors ${branchMode === 'existing' ? 'border-yellow-600/50 focus:ring-yellow-500' : 'border-slate-600 focus:ring-blue-500'}`}
+                                                />
+                                                {branchMode === 'new' && !newBranchName && (
+                                                    <span className="absolute right-3 top-2.5 text-xs text-gray-600 pointer-events-none italic">Auto-generated name</span>
+                                                )}
+                                            </div>
+
                                             <button
                                                 onClick={() => {
                                                     setScanMatches([]); // Reset to scan again
@@ -1414,24 +1438,19 @@ export default function PvcMigratorPage() {
                                                     setScanPath(''); // Triggers cleanup via useEffect
                                                     trackActivity({ action: "GITOPS_RESCAN", label: "Reset Scan" });
                                                 }}
-                                                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors"
+                                                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors text-gray-300"
                                             >
                                                 Rescan
                                             </button>
                                             <button
                                                 onClick={handlePushFixes}
                                                 disabled={isPushing || scanMatches.filter(m => m.selected).length === 0}
-                                                className="flex-1 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"
+                                                className={`px-6 py-2 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2 text-white ${isPushing || scanMatches.filter(m => m.selected).length === 0 ? 'bg-slate-700 cursor-not-allowed opacity-50' : (branchMode === 'existing' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500')}`}
                                             >
                                                 {isPushing ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
-                                                {isPushing ? 'Committing & Pushing...' : `Push Updates`}
+                                                {isPushing ? 'Pushing...' : (branchMode === 'existing' ? 'Commit Directly' : 'Push Branch')}
                                             </button>
                                         </div>
-                                        {branchMode === 'existing' && (
-                                            <p className="text-[10px] text-yellow-500/80 mt-1">
-                                                ⚠️ Warning: You are pushing directly to an existing branch. Ensure you have pulled latest changes.
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
                             </div>

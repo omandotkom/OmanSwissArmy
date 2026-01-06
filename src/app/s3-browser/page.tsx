@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Folder, File, ArrowLeft, RefreshCw, Download, Cloud, LogOut, Database,
     ChevronRight, HardDrive, BarChart2, AlertCircle, Plus, Save, Trash2,
-    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText
+    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud
 } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
@@ -101,6 +101,11 @@ export default function S3BrowserPage() {
     // --- State: Preview ---
     const [previewData, setPreviewData] = useState<{ name: string, type: 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'code' | 'office' | 'unsupported', url: string, content?: string } | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
+
+    // --- State: Upload ---
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ total: number, current: number, fileName: string } | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Effects ---
 
@@ -499,6 +504,60 @@ export default function S3BrowserPage() {
 
     const closePreview = () => setPreviewData(null);
 
+    // --- Actions: Upload ---
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        setIsUploading(true);
+        const fileList = Array.from(e.target.files);
+        let completed = 0;
+
+        const profile = profiles.find(p => p.id === activeProfileId);
+        const cfg = profile ? profile.config : formConfig;
+
+        for (const file of fileList) {
+            setUploadProgress({ total: fileList.length, current: completed + 1, fileName: file.name });
+            try {
+                // Use Proxy Upload to avoid CORS/Network issues with Direct Upload
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('bucketName', selectedBucket);
+                formData.append('key', currentPrefix + file.name);
+                formData.append('config', JSON.stringify({
+                    endpoint: cfg.endpoint,
+                    region: cfg.region,
+                    accessKeyId: cfg.accessKeyId,
+                    secretAccessKey: cfg.secretAccessKey
+                }));
+
+                const res = await fetch('/api/s3/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Upload failed');
+                }
+            } catch (err: any) {
+                console.error("Upload failed for " + file.name, err);
+                alert(`Upload failed for ${file.name}: ${err.message}`);
+            }
+            completed++;
+        }
+
+        setIsUploading(false);
+        setUploadProgress(null);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+        fetchFiles(selectedBucket, currentPrefix); // Refresh list
+        trackActivity({ action: "UPLOAD_FILES", label: selectedBucket, details: { count: fileList.length } });
+    };
+
     // --- Render ---
 
     if (!isConnected) {
@@ -677,20 +736,44 @@ export default function S3BrowserPage() {
                                                 </button>
                                             </div>
                                         ) : (
-                                            <button onClick={calculateUsage} disabled={usageLoading} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 border border-slate-700 transition-colors" title="Analyzes file types distribution, counts, and sizes with visual charts">
+                                            <button onClick={calculateUsage} disabled={usageLoading || isUploading} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 border border-slate-700 transition-colors disabled:opacity-50" title="Analyzes file types distribution, counts, and sizes with visual charts">
                                                 {usageLoading ? (
                                                     <>
-                                                        <RefreshCw className="animate-spin" size={14} /> <span className="animate-pulse">Analyzing files...</span>
+                                                        <RefreshCw className="animate-spin" size={14} /> <span className="animate-pulse">Analyzing...</span>
                                                     </>
                                                 ) : (
                                                     <><BarChart2 size={14} /> Analyze Content</>
                                                 )}
                                             </button>
                                         )}
+
+                                        {/* Upload Button */}
+                                        <div className="h-6 w-px bg-slate-800 mx-2"></div>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            ref={fileInputRef}
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                        />
+                                        <button
+                                            onClick={handleUploadClick}
+                                            disabled={isUploading}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-white shadow-lg transition-all ${isUploading ? 'bg-slate-700 cursor-wait ring-1 ring-slate-500/50' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}
+                                        >
+                                            {isUploading ? (
+                                                <>
+                                                    <RefreshCw className="animate-spin" size={14} />
+                                                    <span>{uploadProgress ? `${uploadProgress.current}/${uploadProgress.total}` : 'Uploading...'}</span>
+                                                </>
+                                            ) : (
+                                                <><UploadCloud size={14} /> Upload Files</>
+                                            )}
+                                        </button>
                                     </div>
 
                                     {/* Capacity Visualizer */}
-                                    <button onClick={() => { setCapacityInput(currentCap > 0 ? (currentCap / 1024 / 1024 / 1024).toString() : ''); setShowCapacityModal(true); }} className="group relative">
+                                    <button onClick={() => { setCapacityInput(currentCap > 0 ? (currentCap / 1024 / 1024 / 1024).toString() : ''); setShowCapacityModal(true); }} disabled={isUploading} className="group relative disabled:opacity-50">
                                         {currentCap > 0 && bucketUsage ? (
                                             <div className="w-48">
                                                 <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
@@ -712,7 +795,7 @@ export default function S3BrowserPage() {
 
                                 {/* Breadcrumb */}
                                 <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-1 text-sm overflow-x-auto">
-                                    <button onClick={() => fetchFiles(selectedBucket, '')} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors">root</button>
+                                    <button onClick={() => fetchFiles(selectedBucket, '')} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
                                     {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
                                         <React.Fragment key={i}>
                                             <ChevronRight size={14} className="text-slate-600" />

@@ -132,6 +132,13 @@ export const toolGroups = [
                 dependency: "oc",
             },
             {
+                href: "/pvc-hunter",
+                title: "Global PVC Hunter",
+                description: "Scan entire cluster for zombie PVCs across all namespaces.",
+                isNew: true,
+                dependency: "oc",
+            },
+            {
                 href: "/openshift-resource-converter",
                 title: "Resource Unit Converter",
                 description: "Convert CPU and Memory units for Kubernetes/OpenShift.",

@@ -1,4 +1,4 @@
-import { S3Client, ListBucketsCommand, ListObjectsV2Command, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, ListBucketsCommand, ListObjectsV2Command, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 import * as https from "https";
@@ -95,6 +95,26 @@ export class S3Service {
         });
         // Presigned URL valid for 1 hour
         return await getSignedUrl(this.client, command, { expiresIn: 3600 });
+    }
+
+    async getPutFilePresignedUrl(bucketName: string, key: string, contentType: string) {
+        const command = new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            ContentType: contentType
+        });
+        // Presigned URL valid for 1 hour
+        return await getSignedUrl(this.client, command, { expiresIn: 3600 });
+    }
+
+    async uploadFile(bucketName: string, key: string, body: Buffer | Uint8Array | Blob, contentType: string) {
+        const command = new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            Body: body,
+            ContentType: contentType
+        });
+        return await this.client.send(command);
     }
 
     async getBucketUsage(bucketName: string) {
