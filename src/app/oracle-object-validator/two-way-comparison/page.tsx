@@ -9,6 +9,8 @@ import { useToast, ToastContainer } from "@/components/ui/toast";
 import ConnectionManager from "@/components/ConnectionManager";
 import { OracleConnection, getAllConnections } from "@/services/connection-storage";
 import { trackActivity } from "@/lib/tracker";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useMemo } from "react";
 
 interface OwnerMapValue {
     master: OracleConnection | null;
@@ -51,6 +53,28 @@ export default function TwoWayComparisonPage() {
     const [diffContent, setDiffContent] = useState<{ master: string, slave: string, patch: string, title: string }>({ master: '', slave: '', patch: '', title: '' });
     const [isLoadingDiff, setIsLoadingDiff] = useState(false);
     const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
+
+    // Filters
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const debouncedFilters = useDebounce(columnFilters, 300);
+
+    // Optimized Filtering with Memoization
+    const filteredData = useMemo(() => {
+        return previewData.filter(row => {
+            // 1. Issued Only Filter
+            if (showIssuedOnly) {
+                const c = String(row['CONCLUSION'] || '');
+                if (c.includes("Match") || c === 'Match') return false;
+            }
+            // 2. Column Filters (Debounced)
+            return Object.keys(debouncedFilters).every(key => {
+                const filterVal = debouncedFilters[key]?.toLowerCase();
+                if (!filterVal) return true;
+                const cellVal = String(row[key] || '').toLowerCase();
+                return cellVal.includes(filterVal);
+            });
+        });
+    }, [previewData, showIssuedOnly, debouncedFilters]);
 
     useEffect(() => {
         getAllConnections().then(setAvailableConnections);
@@ -206,9 +230,16 @@ export default function TwoWayComparisonPage() {
 
     const fetchPreviewData = async () => {
         if (!jobId) return;
+        trackActivity({
+            action: 'TWO_WAY_VIEW_REPORT',
+            label: 'View Report Preview',
+            details: `JobId: ${jobId}`
+        });
+
         setViewModalOpen(true);
         setIsLoadingPreview(true);
         setPreviewData([]);
+        setColumnFilters({});
         setPreviewPage(1);
 
         try {
@@ -510,10 +541,24 @@ export default function TwoWayComparisonPage() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
+                                {Object.keys(columnFilters).some(k => columnFilters[k]) && (
+                                    <button
+                                        onClick={() => setColumnFilters({})}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 hover:text-white flex items-center gap-2"
+                                    >
+                                        <X className="w-3 h-3" /> Clear Filters
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => {
-                                        setShowIssuedOnly(!showIssuedOnly);
+                                        const newVal = !showIssuedOnly;
+                                        setShowIssuedOnly(newVal);
                                         setPreviewPage(1);
+                                        trackActivity({
+                                            action: 'TWO_WAY_TOGGLE_FILTER',
+                                            label: 'Toggle Preview Filter',
+                                            details: `ShowIssuedOnly: ${newVal}`
+                                        });
                                     }}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${showIssuedOnly
                                         ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30'
@@ -541,45 +586,62 @@ export default function TwoWayComparisonPage() {
                             ) : (
                                 <>
                                     <table className="w-full text-left text-sm border-collapse">
-                                        <thead className="bg-zinc-900 text-zinc-400 sticky top-0">
+                                        <thead className="bg-zinc-900 text-zinc-400 sticky top-0 z-10 shadow-lg">
                                             <tr>
                                                 {previewData.length > 0 && Object.keys(previewData[0]).map(h => (
-                                                    <th key={h} className="p-3 border-b border-zinc-800 font-semibold">{h}</th>
+                                                    <th key={h} className="p-3 border-b border-zinc-800 font-semibold min-w-[150px] align-top">
+                                                        <div className="flex flex-col gap-2">
+                                                            <span className="flex items-center justify-between">
+                                                                {h}
+                                                                {columnFilters[h] && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+                                                            </span>
+                                                            <input
+                                                                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs font-normal text-zinc-300 focus:border-blue-500 outline-none placeholder:text-zinc-700"
+                                                                placeholder={`Filter...`}
+                                                                value={columnFilters[h] || ''}
+                                                                onChange={e => {
+                                                                    setColumnFilters(prev => ({ ...prev, [h]: e.target.value }));
+                                                                    setPreviewPage(1);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </th>
                                                 ))}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-                                            {(showIssuedOnly
-                                                ? previewData.filter(row => {
-                                                    const c = String(row['CONCLUSION'] || '');
-                                                    return !c.includes("Match") && c !== 'Match';
-                                                })
-                                                : previewData
-                                            ).slice((previewPage - 1) * 100, previewPage * 100).map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-zinc-900/50">
-                                                    {Object.entries(row).map(([key, val]: [string, any], cIdx) => (
-                                                        <td key={cIdx} className="p-3 border-b border-zinc-800/50 whitespace-nowrap">
-                                                            {key === 'CONCLUSION' && String(val).includes("Mismatch") ? (
-                                                                <button onClick={() => handleViewDiff(row)} className="text-blue-400 hover:underline flex gap-1 items-center">
-                                                                    {String(val)} <Eye className="w-3 h-3" />
-                                                                </button>
-                                                            ) : String(val)}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            ))}
+                                            {filteredData
+                                                .slice((previewPage - 1) * 100, previewPage * 100)
+                                                .map((row, idx) => (
+                                                    <tr key={idx} className="hover:bg-zinc-900/50">
+                                                        {Object.entries(row).map(([key, val]: [string, any], cIdx) => (
+                                                            <td key={cIdx} className="p-3 border-b border-zinc-800/50 whitespace-nowrap">
+                                                                {key === 'CONCLUSION' && String(val).includes("Mismatch") ? (
+                                                                    <button onClick={() => handleViewDiff(row)} className="text-blue-400 hover:underline flex gap-1 items-center">
+                                                                        {String(val)} <Eye className="w-3 h-3" />
+                                                                    </button>
+                                                                ) : String(val)}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
                                         </tbody>
+                                        {filteredData.length === 0 && (
+                                            <tbody>
+                                                <tr>
+                                                    <td colSpan={100} className="p-8 text-center text-zinc-500 italic">
+                                                        No results match filters
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        )}
                                     </table>
                                 </>
                             )}
                         </div>
                         <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex justify-between items-center text-sm text-zinc-400">
                             <div>
-                                Total Rows: <span className="text-white font-bold">
-                                    {showIssuedOnly
-                                        ? previewData.filter(row => { const c = String(row['CONCLUSION'] || ''); return !c.includes("Match") && c !== 'Match'; }).length
-                                        : previewData.length}
-                                </span>
+                                Total Rows: <span className="text-white font-bold">{filteredData.length}</span>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <button
@@ -595,17 +657,10 @@ export default function TwoWayComparisonPage() {
                                 <span className="text-white font-mono px-2">Page {previewPage}</span>
                                 <button
                                     onClick={() => {
-                                        const filteredLen = showIssuedOnly
-                                            ? previewData.filter(row => { const c = String(row['CONCLUSION'] || ''); return !c.includes("Match") && c !== 'Match'; }).length
-                                            : previewData.length;
-                                        setPreviewPage(p => Math.min(Math.ceil(filteredLen / 100), p + 1));
+                                        setPreviewPage(p => Math.min(Math.ceil(filteredData.length / 100), p + 1));
                                     }}
-                                    disabled={(previewPage * 100) >= (showIssuedOnly
-                                        ? previewData.filter(row => { const c = String(row['CONCLUSION'] || ''); return !c.includes("Match") && c !== 'Match'; }).length
-                                        : previewData.length)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(previewPage * 100) >= (showIssuedOnly
-                                        ? previewData.filter(row => { const c = String(row['CONCLUSION'] || ''); return !c.includes("Match") && c !== 'Match'; }).length
-                                        : previewData.length)
+                                    disabled={(previewPage * 100) >= filteredData.length}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(previewPage * 100) >= filteredData.length
                                         ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
                                         : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
                                         }`}
