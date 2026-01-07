@@ -283,12 +283,13 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
 
                     const ownersList = task.owners.map(o => `'${o}'`).join(',');
                     const query = `
-                        SELECT owner, object_name, object_type, last_ddl_time, status
+                        SELECT owner, object_name, object_type, MAX(last_ddl_time) as last_ddl_time, MAX(status) as status
                         FROM all_objects
                         WHERE owner IN (${ownersList})
                         AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX PARTITION', 'TABLE PARTITION')
                         AND object_name NOT LIKE 'BIN$%'
-                        ORDER BY owner, object_name, object_type
+                        GROUP BY owner, object_name, object_type
+                        ORDER BY UPPER(owner), UPPER(object_name), UPPER(object_type)
                     `;
                     addLog(`  > Fetching metadata stream from Master...`);
                     const stream = masterConn.queryStream(query, [], { outFormat: oracledb.OUT_FORMAT_OBJECT });
@@ -314,12 +315,13 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
 
                     const ownersList = task.owners.map(o => `'${o}'`).join(',');
                     const query = `
-                        SELECT owner, object_name, object_type, last_ddl_time, status
+                        SELECT owner, object_name, object_type, MAX(last_ddl_time) as last_ddl_time, MAX(status) as status
                         FROM all_objects
                         WHERE owner IN (${ownersList})
                         AND object_type NOT IN ('LOB', 'LOB PARTITION', 'INDEX PARTITION', 'TABLE PARTITION')
                         AND object_name NOT LIKE 'BIN$%'
-                        ORDER BY owner, object_name, object_type
+                        GROUP BY owner, object_name, object_type
+                        ORDER BY UPPER(owner), UPPER(object_name), UPPER(object_type)
                     `;
                     addLog(`  > Fetching metadata stream from Slave...`);
                     const stream = slaveConn.queryStream(query, [], { outFormat: oracledb.OUT_FORMAT_OBJECT });
@@ -413,18 +415,18 @@ async function processJob(jobId: string, excelData: any[], ownerMappings: Record
 
                 const getCompVal = (row: any) => {
                     if (!row) return null;
-                    const o = (row.OWNER || row.owner || '').toUpperCase();
-                    const n = (row.OBJECT_NAME || row.name || '').toUpperCase();
-                    const t = (row.OBJECT_TYPE || row.type || '').toUpperCase();
+                    const o = (row.OWNER || row.owner || '').trim().toUpperCase();
+                    const n = (row.OBJECT_NAME || row.name || '').trim().toUpperCase();
+                    const t = (row.OBJECT_TYPE || row.type || '').trim().toUpperCase();
                     return `${o}|${n}|${t}`;
                 };
 
                 const getExcelVal = (idx: number) => {
                     if (idx >= taskExcelItems.length) return null;
                     const row = taskExcelItems[idx];
-                    const o = (row.owner || '').toUpperCase();
-                    const n = (row.name || '').toUpperCase();
-                    const t = (row.type || '').toUpperCase();
+                    const o = (row.owner || '').trim().toUpperCase();
+                    const n = (row.name || '').trim().toUpperCase();
+                    const t = (row.type || '').trim().toUpperCase();
                     return `${o}|${n}|${t}`;
                 };
 
