@@ -723,7 +723,7 @@ export default function TwoWayComparisonPage() {
                                                     <tr key={idx} className="hover:bg-zinc-900/50">
                                                         {Object.entries(row).map(([key, val]: [string, any], cIdx) => (
                                                             <td key={cIdx} className="p-3 border-b border-zinc-800/50 whitespace-nowrap">
-                                                                {key === 'CONCLUSION' && String(val).includes("Mismatch") ? (
+                                                                {key === 'CONCLUSION' && (String(val).includes("Mismatch") || String(val).includes("Missing") || String(val).includes("Extra")) ? (
                                                                     <button onClick={() => handleViewDiff(row)} className="text-blue-400 hover:underline flex gap-1 items-center">
                                                                         {String(val)} <Eye className="w-3 h-3" />
                                                                     </button>
