@@ -58,6 +58,17 @@ export default function TwoWayComparisonPage() {
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
     const debouncedFilters = useDebounce(columnFilters, 300);
 
+    // Compilation State
+    const [currentDiffObject, setCurrentDiffObject] = useState<{ owner: string, name: string, type: string } | null>(null);
+    const [compileModal, setCompileModal] = useState<{
+        direction: 'master_to_slave' | 'slave_to_master',
+        sourceName: string,
+        targetName: string,
+        ddl: string,
+        targetEnv: OracleConnection
+    } | null>(null);
+    const [isCompiling, setIsCompiling] = useState(false);
+
     // Optimized Filtering with Memoization
     const filteredData = useMemo(() => {
         return previewData.filter(row => {
@@ -296,6 +307,7 @@ export default function TwoWayComparisonPage() {
 
         setIsDiffModalOpen(true);
         setIsLoadingDiff(true);
+        setCurrentDiffObject({ owner, name, type });
         setDiffContent({ master: '', slave: '', patch: '', title: `${owner}.${name} (${type})` });
 
         trackActivity({
@@ -330,6 +342,83 @@ export default function TwoWayComparisonPage() {
         }
     };
 
+    const initiateCompile = (direction: 'master_to_slave' | 'slave_to_master') => {
+        if (!currentDiffObject) return;
+        const { owner, type } = currentDiffObject;
+        if (type === 'TABLE') return; // Restriction
+
+        const mapping = ownerMappings[owner];
+        if (!mapping?.master || !mapping?.slave) return;
+
+        let ddl = '';
+        let targetEnv = null;
+        let sourceName = '';
+        let targetName = '';
+
+        if (direction === 'master_to_slave') {
+            ddl = diffContent.master;
+            targetEnv = mapping.slave;
+            sourceName = mapping.master!.name;
+            targetName = mapping.slave!.name;
+        } else {
+            ddl = diffContent.slave;
+            targetEnv = mapping.master;
+            sourceName = mapping.slave!.name;
+            targetName = mapping.master!.name;
+        }
+
+        if (!ddl || ddl.startsWith('-- Error') || ddl.startsWith('-- No Patch')) {
+            addToast("Invalid DDL content. Cannot compile.", "error");
+            return;
+        }
+
+        setCompileModal({ direction, sourceName, targetName, ddl, targetEnv: targetEnv! });
+    };
+
+    const executeCompile = async () => {
+        if (!compileModal || !currentDiffObject) return;
+        setIsCompiling(true);
+        try {
+            const res = await fetch('/api/oracle/execute-ddl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetEnv: compileModal.targetEnv,
+                    ddl: compileModal.ddl,
+                    objectType: currentDiffObject.type // Important for handling PACKAGE BODY vs PACKAGE
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                addToast("Object compiled successfully!", "success");
+                setCompileModal(null);
+
+                trackActivity({
+                    action: 'TWO_WAY_COMPILE_SUCCESS',
+                    label: `Compiled ${currentDiffObject.name}`,
+                    details: `Direction: ${compileModal.direction}`
+                });
+
+                // Refresh Diff
+                // Reuse handleViewDiff but we need 'row'. Constructing dummy row
+                if (currentDiffObject) {
+                    handleViewDiff({
+                        OWNER: currentDiffObject.owner,
+                        OBJECT_NAME: currentDiffObject.name,
+                        OBJECT_TYPE: currentDiffObject.type
+                    });
+                }
+
+            } else {
+                addToast(`Compilation Failed: ${data.error}`, "error");
+            }
+        } catch (e: any) {
+            addToast("Network Error during compilation", "error");
+        } finally {
+            setIsCompiling(false);
+        }
+    };
 
     return (
         <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
@@ -698,13 +787,44 @@ export default function TwoWayComparisonPage() {
                                 <button onClick={() => setIsDiffModalOpen(false)}><X className="text-zinc-400 hover:text-white" /></button>
                             </div>
                         </div>
-                        <div className="flex-1 relative bg-[#1e1e1e] flex flex-col">
+                        <div className="flex-1 relative bg-[#1e1e1e] flex flex-col group">
                             <div className="flex-1 relative">
                                 <DiffEditor
                                     height="100%" theme="vs-dark"
                                     original={diffContent.master} modified={diffContent.slave}
                                     language="sql" options={{ readOnly: true, renderSideBySide: true }}
                                 />
+                                {/* Overlay Buttons for Compilation */}
+                                {currentDiffObject && currentDiffObject.type !== 'TABLE' && (
+                                    <>
+                                        <div className="absolute top-0 left-0 w-1/2 p-2 pointer-events-none flex justify-between px-8 z-10">
+                                            <div className="pointer-events-auto">
+                                                <button
+                                                    onClick={() => initiateCompile('master_to_slave')}
+                                                    className="bg-zinc-800/80 hover:bg-emerald-600/80 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                                                >
+                                                    Push to Slave <ArrowLeft className="w-3 h-3 rotate-180" />
+                                                </button>
+                                            </div>
+                                            <span className="bg-zinc-800/80 text-emerald-400 text-xs px-2 py-1 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm">
+                                                MASTER: {currentDiffObject ? ownerMappings[currentDiffObject.owner]?.master?.name : ''}
+                                            </span>
+                                        </div>
+                                        <div className="absolute top-0 right-0 w-1/2 p-2 pointer-events-none flex justify-between px-8 z-10 flex-row-reverse">
+                                            <div className="pointer-events-auto">
+                                                <button
+                                                    onClick={() => initiateCompile('slave_to_master')}
+                                                    className="bg-zinc-800/80 hover:bg-blue-600/80 text-blue-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <ArrowLeft className="w-3 h-3" /> Push to Master
+                                                </button>
+                                            </div>
+                                            <span className="bg-zinc-800/80 text-blue-400 text-xs px-2 py-1 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm">
+                                                SLAVE: {currentDiffObject ? ownerMappings[currentDiffObject.owner]?.slave?.name : ''}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             {diffContent.patch && (
                                 <div className="h-[25%] border-t border-zinc-700 bg-zinc-900 flex flex-col">
@@ -727,6 +847,57 @@ export default function TwoWayComparisonPage() {
                             <div className="h-full bg-blue-500 animate-progress-indeterminate"></div>
                         </div>
                         <p className="text-xs text-zinc-500 text-center">Querying Master & Slave databases simultaneously...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Compilation Confirmation Modal */}
+            {compileModal && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in zoom-in duration-200">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-lg p-6 shadow-2xl">
+                        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                            <Database className="w-5 h-5 text-orange-500" /> Confirm Compilation
+                        </h3>
+                        <p className="text-zinc-400 text-sm mb-6">
+                            You are about to compile/overwrite an object in the database.
+                            <br />
+                            <span className="text-red-400 font-bold block mt-2">
+                                ACTION: {compileModal.direction === 'master_to_slave' ? 'PUSH TO SLAVE' : 'PUSH TO MASTER'}
+                            </span>
+                        </p>
+
+                        <div className="bg-zinc-950 p-4 rounded-lg border border-zinc-800 mb-6 text-sm font-mono space-y-2">
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">Source (Code):</span>
+                                <span className="text-emerald-400">{compileModal.sourceName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">Target (Execute):</span>
+                                <span className="text-blue-400">{compileModal.targetName}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-zinc-800 pt-2 mt-2">
+                                <span className="text-zinc-500">Object:</span>
+                                <span className="text-white">{currentDiffObject?.owner}.{currentDiffObject?.name}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setCompileModal(null)}
+                                disabled={isCompiling}
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeCompile}
+                                disabled={isCompiling}
+                                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-orange-900/20"
+                            >
+                                {isCompiling && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                                {isCompiling ? 'Compiling...' : 'Confirm & Compile'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
