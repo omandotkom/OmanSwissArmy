@@ -100,9 +100,11 @@ export default function OracleObjectLocalBackup() {
                 return;
             }
             setSelectedConns(prev => [...prev, conn]);
+            trackActivity({ action: "BACKUP_ADD_CONN", label: conn.name });
             setIsConnManagerOpen(false);
         } else if (mode === 'EXCEL' && selectingForOwner) {
             setOwnerMappings(prev => ({ ...prev, [selectingForOwner]: conn }));
+            trackActivity({ action: "BACKUP_MAP_OWNER", label: selectingForOwner, details: { conn: conn.name } });
             setSelectingForOwner(null);
             setIsConnManagerOpen(false);
         }
@@ -175,6 +177,12 @@ export default function OracleObjectLocalBackup() {
                 setDetectedOwners(ownersList);
                 setOwnerMappings(initialMapping);
                 setExcelItems(allItems);
+
+                trackActivity({
+                    action: "BACKUP_FILE_UPLOAD",
+                    label: uploadedFile.name,
+                    details: { owners: ownersList.length, objects: allItems.length }
+                });
 
             } catch (err) {
                 console.error(err);
@@ -493,7 +501,11 @@ export default function OracleObjectLocalBackup() {
                     Select Source Databases
                 </h2>
                 <button
-                    onClick={() => { setSelectingForOwner(null); setIsConnManagerOpen(true); }}
+                    onClick={() => {
+                        setSelectingForOwner(null);
+                        setIsConnManagerOpen(true);
+                        trackActivity({ action: "BACKUP_OPEN_CONN_MANAGER", label: "ALL Mode" });
+                    }}
                     className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
                 >
                     + Add Connection
@@ -566,7 +578,10 @@ export default function OracleObjectLocalBackup() {
                                 <p className="text-xs text-zinc-500">{excelItems.length} objects found</p>
                             </div>
                         </div>
-                        <button onClick={() => { setFile(null); setExcelItems([]); setDetectedOwners([]); }} className="text-xs text-red-400 hover:text-red-300">Remove</button>
+                        <button onClick={() => {
+                            trackActivity({ action: "BACKUP_REMOVE_FILE", label: file.name });
+                            setFile(null); setExcelItems([]); setDetectedOwners([]);
+                        }} className="text-xs text-red-400 hover:text-red-300">Remove</button>
                     </div>
                 )}
             </div>
@@ -579,7 +594,11 @@ export default function OracleObjectLocalBackup() {
                             <div key={owner} className="flex items-center justify-between bg-zinc-950 p-3 rounded-lg border border-zinc-800">
                                 <span className="font-mono text-yellow-500 font-bold">{owner}</span>
                                 <button
-                                    onClick={() => { setSelectingForOwner(owner); setIsConnManagerOpen(true); }}
+                                    onClick={() => {
+                                        setSelectingForOwner(owner);
+                                        setIsConnManagerOpen(true);
+                                        trackActivity({ action: "BACKUP_OPEN_CONN_MANAGER", label: "Excel Mode", details: { owner } });
+                                    }}
                                     className={`px-4 py-2 rounded text-sm border flex items-center gap-2 ${ownerMappings[owner] ? "border-zinc-700 bg-zinc-900 text-zinc-200" : "border-zinc-700 border-dashed text-zinc-500 hover:text-zinc-300"}`}
                                 >
                                     <Database className="w-3 h-3" />
