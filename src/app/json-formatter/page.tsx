@@ -275,7 +275,10 @@ export default function JsonFormatter() {
                         <FolderTree className="w-4 h-4 text-indigo-400" />
                         Schema Explorer
                     </h2>
-                    <button onClick={() => setShowSidebar(false)} className="text-zinc-500 hover:text-zinc-300">
+                    <button onClick={() => {
+                        setShowSidebar(false);
+                        trackActivity({ action: "JSON_SIDEBAR_TOGGLE", label: "Hide" });
+                    }} className="text-zinc-500 hover:text-zinc-300">
                         <ChevronRight className="w-4 h-4 rotate-180" />
                     </button>
                 </div>
@@ -312,7 +315,10 @@ export default function JsonFormatter() {
                     <div className="flex items-center gap-4">
                         {!showSidebar && (
                             <button
-                                onClick={() => setShowSidebar(true)}
+                                onClick={() => {
+                                    setShowSidebar(true);
+                                    trackActivity({ action: "JSON_SIDEBAR_TOGGLE", label: "Show" });
+                                }}
                                 className="p-2 rounded hover:bg-zinc-900 text-zinc-400"
                                 title="Show Schema Explorer"
                             >
@@ -366,7 +372,10 @@ export default function JsonFormatter() {
                             )}
 
                             <button
-                                onClick={() => setIsHelperOpen(!isHelperOpen)}
+                                onClick={() => {
+                                    setIsHelperOpen(!isHelperOpen);
+                                    trackActivity({ action: "JSON_HELPER_TOGGLE", label: !isHelperOpen ? "Open" : "Close" });
+                                }}
                                 className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all border ${isHelperOpen ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'bg-transparent text-zinc-400 border-transparent hover:bg-zinc-800 hover:text-zinc-300'}`}
                             >
                                 <Info className="h-4 w-4" />

@@ -524,7 +524,10 @@ export default function DirectoryDiffPage() {
                                             key={node.path}
                                             node={node}
                                             level={0}
-                                            onSelect={setSelectedNode}
+                                            onSelect={(n) => {
+                                                setSelectedNode(n);
+                                                trackActivity({ action: "DIR_DIFF_SELECT_NODE", label: n.path, details: { type: n.type, status: n.status } });
+                                            }}
                                             selectedPath={selectedNode?.path ?? null}
                                         />
                                     ))}

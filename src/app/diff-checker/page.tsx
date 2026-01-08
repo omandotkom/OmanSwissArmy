@@ -129,7 +129,10 @@ export default function DiffChecker() {
                         <div className="flex-1 flex items-center justify-between px-4 py-2 border-r border-zinc-900">
                             <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Original</span>
                             <button
-                                onClick={() => triggerFind(true)}
+                                onClick={() => {
+                                    triggerFind(true);
+                                    trackActivity({ action: "DIFF_FIND", label: "Original" });
+                                }}
                                 className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
                                 title="Find in Original (Ctrl+F)"
                             >
@@ -140,7 +143,10 @@ export default function DiffChecker() {
                             <div className="flex-1 flex items-center justify-between px-4 py-2">
                                 <span className="text-xs font-medium uppercase tracking-wider text-indigo-400">Modified</span>
                                 <button
-                                    onClick={() => triggerFind(false)}
+                                    onClick={() => {
+                                        triggerFind(false);
+                                        trackActivity({ action: "DIFF_FIND", label: "Modified" });
+                                    }}
                                     className="p-1 rounded hover:bg-zinc-800 text-indigo-400 hover:text-indigo-300 transition-colors"
                                     title="Find in Modified (Ctrl+F)"
                                 >
