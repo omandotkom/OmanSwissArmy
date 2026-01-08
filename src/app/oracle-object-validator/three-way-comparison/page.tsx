@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Database, FileSpreadsheet, Upload, X, Eye, ListChecks, Play, Code2, FileText, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -48,6 +48,32 @@ export default function ThreeWayComparisonPage() {
     const [previewPage, setPreviewPage] = useState(1);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [showIssuedOnly, setShowIssuedOnly] = useState(false);
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+
+    const filteredData = useMemo(() => {
+        let data = previewData;
+
+        // 1. Filter by "Issued Only"
+        if (showIssuedOnly) {
+            data = data.filter(row => {
+                const c = String(row['CONCLUSION'] || '');
+                return c !== 'Match' && c !== 'Match (Done)' && !c.includes('Match');
+            });
+        }
+
+        // 2. Filter by Columns
+        const activeFilters = Object.entries(columnFilters).filter(([_, val]) => val.trim() !== '');
+        if (activeFilters.length > 0) {
+            data = data.filter(row => {
+                return activeFilters.every(([key, filterVal]) => {
+                    const cellVal = String(row[key] || '').toLowerCase();
+                    return cellVal.includes(filterVal.toLowerCase());
+                });
+            });
+        }
+
+        return data;
+    }, [previewData, showIssuedOnly, columnFilters]);
 
     // Diff Viewer State
     const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
@@ -425,6 +451,8 @@ export default function ThreeWayComparisonPage() {
         setViewModalOpen(true);
         setIsLoadingPreview(true);
         setPreviewData([]);
+        setPreviewData([]);
+        setColumnFilters({});
         setShowIssuedOnly(false);
         setPreviewPage(1); // Reset to page 1
 
@@ -527,6 +555,7 @@ export default function ThreeWayComparisonPage() {
                 patch: data.patchScript || '-- No Generated Patch',
                 title: `${owner}.${name} (${type})`
             });
+            setIsDiffModalOpen(true);
 
         } catch (e: any) {
             addToast("Failed to fetch DDL: " + e.message, "error");
@@ -1038,21 +1067,23 @@ export default function ThreeWayComparisonPage() {
                                     <thead className="bg-zinc-900 text-zinc-400 sticky top-0 z-10 shadow-sm">
                                         <tr>
                                             {previewData.length > 0 && Object.keys(previewData[0]).map((header) => (
-                                                <th key={header} className="p-3 border-b border-zinc-800 font-semibold whitespace-nowrap">
-                                                    {header.replace(/_/g, ' ')}
+                                                <th key={header} className="p-3 border-b border-zinc-800 font-semibold whitespace-nowrap align-top">
+                                                    <div className="flex flex-col gap-2">
+                                                        <span>{header.replace(/_/g, ' ')}</span>
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Filter ${header}...`}
+                                                            value={columnFilters[header] || ''}
+                                                            onChange={(e) => setColumnFilters(prev => ({ ...prev, [header]: e.target.value }))}
+                                                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs font-normal text-zinc-300 focus:outline-none focus:border-blue-500"
+                                                        />
+                                                    </div>
                                                 </th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-                                        {(showIssuedOnly
-                                            ? previewData.filter(row => {
-                                                const c = String(row['CONCLUSION'] || '');
-                                                // Exclude "Match" and "Match (Done)"
-                                                return c !== 'Match' && c !== 'Match (Done)' && !c.includes('Match');
-                                            })
-                                            : previewData
-                                        ).slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
+                                        {filteredData.slice((previewPage - 1) * 200, previewPage * 200).map((row, idx) => (
                                             <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
                                                 {Object.entries(row).map(([key, val]: [string, any], cIdx) => {
                                                     const isConclusion = key === 'CONCLUSION';
@@ -1097,27 +1128,12 @@ export default function ThreeWayComparisonPage() {
                                 </button>
                                 <span className="text-sm text-zinc-400">
                                     Page <span className="text-white font-bold">{previewPage}</span> of <span className="text-white font-bold">{
-                                        Math.ceil(
-                                            (showIssuedOnly
-                                                ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
-                                                : previewData.length
-                                            ) / 200
-                                        ) || 1
+                                        Math.ceil(filteredData.length / 200) || 1
                                     }</span>
                                 </span>
                                 <button
-                                    onClick={() => setPreviewPage(p => Math.min(Math.ceil(
-                                        (showIssuedOnly
-                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
-                                            : previewData.length
-                                        ) / 200
-                                    ), p + 1))}
-                                    disabled={previewPage >= Math.ceil(
-                                        (showIssuedOnly
-                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
-                                            : previewData.length
-                                        ) / 200
-                                    )}
+                                    onClick={() => setPreviewPage(p => Math.min(Math.ceil(filteredData.length / 200), p + 1))}
+                                    disabled={previewPage >= Math.ceil(filteredData.length / 200)}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewPage >= Math.ceil(
                                         (showIssuedOnly
                                             ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
@@ -1133,12 +1149,7 @@ export default function ThreeWayComparisonPage() {
                             </div>
                             <div className="flex items-center gap-4">
                                 <span className="text-xs text-zinc-500 hidden md:inline">
-                                    Total {
-                                        (showIssuedOnly
-                                            ? previewData.filter(row => !String(row['CONCLUSION'] || '').includes("Match")).length
-                                            : previewData.length
-                                        ).toLocaleString()
-                                    } rows loaded.
+                                    Total {filteredData.length.toLocaleString()} rows loaded.
                                 </span>
                                 <button onClick={() => setViewModalOpen(false)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white text-sm font-medium">
                                     Close Preview
