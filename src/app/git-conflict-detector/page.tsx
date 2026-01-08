@@ -1,8 +1,8 @@
-
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowRight, CheckCircle, AlertTriangle, GitMerge, FileWarning, Search, FolderOpen } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, GitMerge, FileWarning, Search, FolderOpen } from "lucide-react";
 import { trackActivity } from "@/lib/tracker";
 
 export default function GitConflictDetectorPage() {
@@ -89,6 +89,16 @@ export default function GitConflictDetectorPage() {
     return (
         <div className="container mx-auto p-8 max-w-4xl min-h-screen text-slate-200">
             <header className="mb-8">
+                <div className="flex items-center gap-4 mb-4">
+                    <Link
+                        href="/"
+                        onClick={() => trackActivity({ action: 'CLICK_BACK', label: 'Back from Git Conflict Detector' })}
+                        className="group flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-400 bg-slate-900/50 hover:bg-slate-800 rounded-lg transition-all border border-slate-800 hover:text-white"
+                    >
+                        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                        Back to Tools
+                    </Link>
+                </div>
                 <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 flex items-center gap-3">
                     <GitMerge className="text-blue-400" />
                     Git Conflict Detector <span className="text-sm border border-blue-500/50 text-blue-400 px-2 py-0.5 rounded-full bg-blue-500/10">Beta</span>
@@ -115,7 +125,10 @@ export default function GitConflictDetectorPage() {
                             />
                         </div>
                         <button
-                            onClick={() => fetchBranches(repoPath)}
+                            onClick={() => {
+                                trackActivity({ action: "GIT_LOAD_BRANCHES", details: { path: repoPath || 'default' } });
+                                fetchBranches(repoPath);
+                            }}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-700 hover:text-white"
                         >
                             Load Branches
@@ -267,7 +280,13 @@ export default function GitConflictDetectorPage() {
                                 <FileWarning className="w-5 h-5 text-red-500" />
                                 Conflict Details: <span className="text-slate-400 font-mono text-sm">{selectedConflict.file}</span>
                             </h3>
-                            <button onClick={() => setSelectedConflict(null)} className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors">
+                            <button
+                                onClick={() => {
+                                    trackActivity({ action: "GIT_CLOSE_CONFLICT_MODAL", label: "Header Close" });
+                                    setSelectedConflict(null);
+                                }}
+                                className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                            >
                                 <span className="text-xl">✕</span>
                             </button>
                         </div>
@@ -301,7 +320,10 @@ export default function GitConflictDetectorPage() {
                         </div>
                         <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end">
                             <button
-                                onClick={() => setSelectedConflict(null)}
+                                onClick={() => {
+                                    trackActivity({ action: "GIT_CLOSE_CONFLICT_MODAL", label: "Button Close" });
+                                    setSelectedConflict(null);
+                                }}
                                 className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-700"
                             >
                                 Close

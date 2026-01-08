@@ -422,7 +422,7 @@ export default function PvcHunterPage() {
                             </select>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={startScan} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                            <button onClick={() => { startScan(); trackActivity({ action: "GLOBAL_PVC_RESCAN", label: "Manual Rescan" }); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
                                 <RefreshCw size={16} /> Rescan
                             </button>
                             <button onClick={handleExport} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-green-900/20 transition-colors">
@@ -473,7 +473,10 @@ export default function PvcHunterPage() {
                                             </td>
                                             <td className="p-4 text-right">
                                                 <button
-                                                    onClick={() => handleInspect(pvc.namespace, pvc.name)}
+                                                    onClick={() => {
+                                                        trackActivity({ action: "GLOBAL_PVC_INSPECT", label: pvc.name, details: { namespace: pvc.namespace } });
+                                                        handleInspect(pvc.namespace, pvc.name);
+                                                    }}
                                                     className="p-1.5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded transition-colors"
                                                     title="Inspect in Analyzer"
                                                 >
