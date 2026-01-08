@@ -99,6 +99,7 @@ export default function GitBrowser() {
             await loadConnections();
             setError(null);
             // alert("Connection saved!"); // Removed to avoid blocking UI
+            trackActivity({ action: "GITEA_SAVE_CONN", label: connectionName });
         } catch (err) {
             setError("Failed to save connection.");
             console.error(err);
@@ -115,7 +116,10 @@ export default function GitBrowser() {
             setSelectedConnId("");
             setBaseUrl("");
             setToken("");
+            setBaseUrl("");
+            setToken("");
             setConnectionName("");
+            trackActivity({ action: "GITEA_DELETE_CONN", label: selectedConnId });
         } catch (err) {
             setError("Failed to delete connection.");
         }
@@ -128,6 +132,7 @@ export default function GitBrowser() {
         }
 
         setLoading(true);
+        trackActivity({ action: "GITEA_FETCH_REPOS", details: { baseUrl } });
         setError(null);
         setRepos([]);
         setUserProfile(null);
@@ -329,19 +334,19 @@ export default function GitBrowser() {
                     {repos.length > 0 && (
                         <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                             <button
-                                onClick={() => setActiveTab('list')}
+                                onClick={() => { setActiveTab('list'); trackActivity({ action: "GITEA_TAB_CLICK", label: "List" }); }}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'list' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Repository List
                             </button>
                             <button
-                                onClick={() => setActiveTab('analytics')}
+                                onClick={() => { setActiveTab('analytics'); trackActivity({ action: "GITEA_TAB_CLICK", label: "Analytics" }); }}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'analytics' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Analytics Dashboard
                             </button>
                             <button
-                                onClick={() => setActiveTab('account')}
+                                onClick={() => { setActiveTab('account'); trackActivity({ action: "GITEA_TAB_CLICK", label: "Account" }); }}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'account' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Account Insights

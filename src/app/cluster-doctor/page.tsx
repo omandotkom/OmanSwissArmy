@@ -222,7 +222,7 @@ export default function ClusterDoctorPage() {
                 <div className="flex items-center gap-4">
                     {isLoggedIn && <UserBadge />}
                     <button
-                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); trackActivity({ action: "CLICK_DISCONNECT", label: "Cluster Doctor" }); }}
+                        onClick={() => { setIsLoggedIn(false); setLoginCommand(''); trackActivity({ action: "DOCTOR_LOGOUT", label: "User Disconnect" }); }}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:border-red-500/50 rounded-lg text-slate-400 hover:text-red-400 transition-all"
                     >
                         <LogOut size={16} /> Disconnect

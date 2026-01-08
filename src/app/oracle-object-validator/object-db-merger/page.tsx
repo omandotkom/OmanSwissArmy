@@ -114,6 +114,13 @@ export default function ObjectDBMergerPage() {
     };
 
     const removeFile = (id: string) => {
+        const file = fileList.find(f => f.id === id);
+        if (file) {
+            trackActivity({
+                action: 'DB_MERGER_FILE_REMOVE',
+                label: file.file.name
+            });
+        }
         setFileList(prev => prev.filter(f => f.id !== id));
     };
 

@@ -155,6 +155,12 @@ export default function ThreeWayComparisonPage() {
 
 
     const handleConnSelect = (conn: OracleConnection) => {
+        trackActivity({
+            action: 'THREE_WAY_SELECT_CONN',
+            label: conn.name,
+            details: `For: ${selectingForOwner} | Type: ${selectingForType}`
+        });
+
         if (selectingForOwner && selectingForType) {
             setOwnerMappings(prev => ({
                 ...prev,

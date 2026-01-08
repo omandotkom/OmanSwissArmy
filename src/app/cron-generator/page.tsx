@@ -68,7 +68,10 @@ export default function CronGenerator() {
                                 {item.options.map(opt => (
                                     <button
                                         key={opt}
-                                        onClick={() => handleChange(item.field as keyof typeof schedule, opt)}
+                                        onClick={() => {
+                                            handleChange(item.field as keyof typeof schedule, opt);
+                                            trackActivity({ action: "CRON_PRESET_CLICK", label: item.label, details: { value: opt } });
+                                        }}
                                         className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
                                     >
                                         {opt}

@@ -189,7 +189,11 @@ export default function IdlePodFinderPage() {
                             {[1, 5, 10, 20].map(v => (
                                 <button
                                     key={v}
-                                    onClick={() => { setThreshold(v); if (pods.length) fetchPods(); }}
+                                    onClick={() => {
+                                        setThreshold(v);
+                                        if (pods.length) fetchPods();
+                                        trackActivity({ action: "IDLE_POD_CHANGE_THRESHOLD", label: `${v}m` });
+                                    }}
                                     className={`flex-1 text-xs py-1.5 rounded-md transition-all ${threshold === v ? 'bg-teal-500/20 text-teal-400 font-bold' : 'text-slate-400 hover:bg-slate-800'}`}
                                 >
                                     {v}m

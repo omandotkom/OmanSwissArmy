@@ -110,6 +110,7 @@ export default function OracleObjectLocalBackup() {
 
     const handleRemoveConn = (connId: string) => {
         setSelectedConns(prev => prev.filter(c => c.id !== connId));
+        trackActivity({ action: "BACKUP_REMOVE_CONN", label: connId });
     };
 
     // -------------------------------------------------------------------------
@@ -737,7 +738,7 @@ export default function OracleObjectLocalBackup() {
                 {step === 1 && renderStep1()}
                 {step === 2 && (
                     <div className="mb-4">
-                        <button onClick={() => setStep(1)} className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 mb-4 text-sm">
+                        <button onClick={() => { setStep(1); trackActivity({ action: "BACKUP_CHANGE_MODE_BACK" }); }} className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 mb-4 text-sm">
                             <ArrowLeft className="w-3 h-3" /> Change Mode
                         </button>
                         {mode === 'ALL' ? renderStep2All() : renderStep2Excel()}
@@ -746,7 +747,7 @@ export default function OracleObjectLocalBackup() {
                 {step === 3 && (
                     <div className="mb-4">
                         {!isBackupRunning && (
-                            <button onClick={() => { setStep(2); setBackupQueue([]); setProcessingStatus({ total: 0, success: 0, failed: 0 }); }} className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 mb-4 text-sm">
+                            <button onClick={() => { setStep(2); setBackupQueue([]); setProcessingStatus({ total: 0, success: 0, failed: 0 }); trackActivity({ action: "BACKUP_BACK_TO_CONFIG" }); }} className="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 mb-4 text-sm">
                                 <ArrowLeft className="w-3 h-3" /> Back to Config
                             </button>
                         )}

@@ -207,6 +207,12 @@ export default function DirectObjectDiffPage() {
     }, [selectedSchema, sourceConn]);
 
     const handleConnSelect = (conn: OracleConnection) => {
+        trackActivity({
+            action: 'DIRECT_DIFF_SELECT_CONN',
+            label: conn.name,
+            details: `Type: ${selectingFor}`
+        });
+
         if (selectingFor === 'SOURCE') {
             setSourceConn(conn);
             // Reset downstream selections
@@ -225,6 +231,13 @@ export default function DirectObjectDiffPage() {
     };
 
     const removeTarget = (index: number) => {
+        const targetName = targetConns[index]?.name || 'Unknown';
+        trackActivity({
+            action: 'DIRECT_DIFF_REMOVE_TARGET',
+            label: targetName,
+            details: `Index: ${index}`
+        });
+
         setTargetConns(prev => prev.filter((_, i) => i !== index));
         if (activeTargetIndex >= index && activeTargetIndex > 0) {
             setActiveTargetIndex(prev => prev - 1);
@@ -333,6 +346,13 @@ export default function DirectObjectDiffPage() {
         setMultiSelection(prev => {
             // Check existence
             const exists = prev.find(p => p.name === obj.name && p.type === obj.type);
+
+            trackActivity({
+                action: 'DIRECT_DIFF_TOGGLE_MULTI',
+                label: obj.name,
+                details: `Action: ${exists ? 'Remove' : 'Add'} | Type: ${obj.type}`
+            });
+
             if (exists) return prev.filter(p => p.name !== obj.name || p.type !== obj.type);
             // Add with current OWNER
             return [...prev, { ...obj, owner: selectedSchema }];
@@ -449,7 +469,10 @@ export default function DirectObjectDiffPage() {
                                         {filteredSchemas.map(schema => (
                                             <div
                                                 key={schema}
-                                                onClick={() => setSelectedSchema(schema)}
+                                                onClick={() => {
+                                                    setSelectedSchema(schema);
+                                                    trackActivity({ action: 'DIRECT_DIFF_SELECT_SCHEMA', label: schema });
+                                                }}
                                                 className={`px-3 py-1.5 text-sm cursor-pointer hover:bg-zinc-800 ${selectedSchema === schema ? 'bg-emerald-900/30 text-emerald-400 font-bold' : 'text-zinc-300'}`}
                                             >
                                                 {schema}
@@ -522,7 +545,16 @@ export default function DirectObjectDiffPage() {
                                             return (
                                                 <div
                                                     key={i}
-                                                    onClick={() => mode === 'SINGLE' && setSelectedObject(obj)}
+                                                    onClick={() => {
+                                                        if (mode === 'SINGLE') {
+                                                            setSelectedObject(obj);
+                                                            trackActivity({
+                                                                action: 'DIRECT_DIFF_SELECT_OBJECT',
+                                                                label: obj.name,
+                                                                details: `Type: ${obj.type}`
+                                                            });
+                                                        }
+                                                    }}
                                                     className={`group px-3 py-2 text-sm max-w-[282px] border-b border-zinc-800/50 flex items-center justify-between
                                                         ${mode === 'SINGLE'
                                                             ? (isSelectedSingle ? 'bg-emerald-900/30 text-emerald-400 cursor-default' : 'text-zinc-300 cursor-pointer hover:bg-zinc-800')

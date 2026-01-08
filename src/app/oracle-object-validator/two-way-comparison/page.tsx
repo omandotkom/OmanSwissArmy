@@ -145,6 +145,12 @@ export default function TwoWayComparisonPage() {
     };
 
     const removeOwner = (owner: string) => {
+        trackActivity({
+            action: 'TWO_WAY_SCHEMA_REMOVE',
+            label: 'Remove Schema',
+            details: `Schema: ${owner}`
+        });
+
         const next = new Set(targetOwners);
         next.delete(owner);
         setTargetOwners(next);
@@ -156,6 +162,12 @@ export default function TwoWayComparisonPage() {
     };
 
     const handleConnSelect = (conn: OracleConnection) => {
+        trackActivity({
+            action: 'TWO_WAY_SELECT_CONN',
+            label: conn.name,
+            details: `For: ${selectingForOwner} | Type: ${selectingForType}`
+        });
+
         if (selectingForOwner && selectingForType) {
             setOwnerMappings(prev => ({
                 ...prev,
@@ -343,6 +355,12 @@ export default function TwoWayComparisonPage() {
     };
 
     const initiateCompile = (direction: 'master_to_slave' | 'slave_to_master') => {
+        trackActivity({
+            action: 'TWO_WAY_COMPILE_INIT',
+            label: 'Init Compile',
+            details: `Direction: ${direction}`
+        });
+
         if (!currentDiffObject) return;
         const { owner, type } = currentDiffObject;
         if (type === 'TABLE') return; // Restriction

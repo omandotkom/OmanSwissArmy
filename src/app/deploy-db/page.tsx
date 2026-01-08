@@ -281,6 +281,7 @@ export default function DeployOracleDB() {
                                         setSheets([]);
                                         setDetectedOwners([]);
                                         setOwnerMappings({});
+                                        trackActivity({ action: "DEPLOY_DB_RESET", label: "Clear File" });
                                     }}
                                     className="text-xs text-red-500 hover:bg-zinc-800 px-3 py-1 rounded transition-colors"
                                 >

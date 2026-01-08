@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Editor from "@monaco-editor/react";
 import { saveRequest, getAllRequests, deleteRequest, ApiRequest } from "@/lib/db";
+import { trackActivity } from "@/lib/tracker";
 import { useToast, ToastContainer } from "@/components/ui/toast";
 import { isDesktopApp } from "@/lib/env";
 
@@ -71,6 +72,7 @@ export default function ApiTest() {
             await saveRequest(requestData);
             await loadSavedRequests();
             addToast("Request saved successfully!", "success");
+            trackActivity({ action: "API_TEST_SAVE", label: requestName });
         } catch (error) {
             console.error("Failed to save request", error);
             addToast("Failed to save request", "error");
@@ -91,6 +93,7 @@ export default function ApiTest() {
         setHeaders(req.headers);
         setBody(req.body);
         setResponse((req.response as ResponseData) || null);
+        trackActivity({ action: "API_TEST_LOAD", label: req.name });
     };
 
     const handleDeleteRequest = async (id: string) => {
@@ -105,6 +108,7 @@ export default function ApiTest() {
                 setResponse(null);
             }
             addToast("Request deleted", "success");
+            trackActivity({ action: "API_TEST_DELETE", label: id });
         }
     };
 
@@ -115,6 +119,7 @@ export default function ApiTest() {
         setMethod("GET");
         setBody("");
         setResponse(null);
+        trackActivity({ action: "API_TEST_NEW" });
     };
 
     const handleSend = async () => {
@@ -124,6 +129,7 @@ export default function ApiTest() {
         const startTime = performance.now();
 
         try {
+            trackActivity({ action: "API_TEST_SEND", details: { method, url, mode } });
             let parsedHeaders: Record<string, string> = {};
             try {
                 parsedHeaders = JSON.parse(headers);
@@ -245,6 +251,7 @@ export default function ApiTest() {
                 <h1 className="text-2xl font-light tracking-wide text-zinc-200">Hit API Endpoint</h1>
                 <Link
                     href="/"
+                    onClick={() => trackActivity({ action: "CLICK_BACK", label: "API Tester" })}
                     className="rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 >
                     Back to Home
