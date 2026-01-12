@@ -27,6 +27,7 @@ export default function ThreeWayComparisonPage() {
     const [isParsingExcel, setIsParsingExcel] = useState(false);
     const [excelData, setExcelData] = useState<any[]>([]); // { owner, name, type }
     const [excelOwners, setExcelOwners] = useState<Set<string>>(new Set());
+    const [skippedOwners, setSkippedOwners] = useState<Set<string>>(new Set());
 
     // Connections
     const [availableConnections, setAvailableConnections] = useState<OracleConnection[]>([]);
@@ -265,6 +266,7 @@ export default function ThreeWayComparisonPage() {
 
                 setExcelData(parsedItems);
                 setExcelOwners(owners);
+                setSkippedOwners(new Set()); // Reset skipped on new upload
 
                 setOwnerMappings({}); // Will be populated by Auto-Mapping Effect
 
@@ -356,10 +358,16 @@ export default function ThreeWayComparisonPage() {
     };
 
     const startAnalysisJob = async () => {
-        const owners = Array.from(excelOwners);
-        const missingConfig = owners.some(o => !ownerMappings[o]?.master || !ownerMappings[o]?.slave);
+        const activeOwners = Array.from(excelOwners).filter(o => !skippedOwners.has(o));
+
+        if (activeOwners.length === 0) {
+            addToast("Please enable at least one schema to scan", "error");
+            return;
+        }
+
+        const missingConfig = activeOwners.some(o => !ownerMappings[o]?.master || !ownerMappings[o]?.slave);
         if (missingConfig) {
-            if (!confirm("Some owners are missing connections. Proceed?")) return;
+            if (!confirm("Some ACTIVE owners are missing connections. Proceed?")) return;
         }
 
         setJobStatus('STARTING');
@@ -368,17 +376,20 @@ export default function ThreeWayComparisonPage() {
         setJobLogs([]);
         setJobId(null);
 
+        const filteredExcelData = excelData.filter(x => !skippedOwners.has(x.owner));
+
         trackActivity({
             action: 'THREE_WAY_JOB_START',
             label: 'Start Analysis',
-            details: `Owners: ${owners.length}`
+            details: `Owners: ${activeOwners.length} (Skipped: ${skippedOwners.size})`
         });
 
         try {
             const res = await fetch('/api/oracle/three-way-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ excelData, ownerMappings })
+                // Only send active data to backend
+                body: JSON.stringify({ excelData: filteredExcelData, ownerMappings })
             });
             const data = await res.json();
             if (data.jobId) {
@@ -529,6 +540,7 @@ export default function ThreeWayComparisonPage() {
 
         setIsLoadingDiff(true);
         setDiffContent({ master: '', slave: '', patch: '', title: `${owner}.${name} (${type})` });
+        setIsDiffModalOpen(true); // Open immediately so user sees the loader
 
         trackActivity({
             action: 'THREE_WAY_VIEW_DIFF',
@@ -555,7 +567,6 @@ export default function ThreeWayComparisonPage() {
                 patch: data.patchScript || '-- No Generated Patch',
                 title: `${owner}.${name} (${type})`
             });
-            setIsDiffModalOpen(true);
 
         } catch (e: any) {
             addToast("Failed to fetch DDL: " + e.message, "error");
@@ -679,41 +690,66 @@ export default function ThreeWayComparisonPage() {
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-zinc-900 font-semibold text-zinc-400 sticky top-0 z-10">
                                         <tr>
+                                            <th className="p-3 border-b border-zinc-800 w-16 text-center">Scan?</th>
                                             <th className="p-3 border-b border-zinc-800">Owner</th>
                                             <th className="p-3 border-b border-zinc-800">Master (Higher Environment)</th>
                                             <th className="p-3 border-b border-zinc-800">Slave (Lower Environment)</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-800">
-                                        {Array.from(excelOwners).map(owner => (
-                                            <tr key={owner} className="hover:bg-zinc-800/30">
-                                                <td className="p-3 font-mono text-emerald-400 font-bold">{owner}</td>
-                                                <td className="p-3">
-                                                    {isAutoMapping ? (
-                                                        <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => { setSelectingForOwner(owner); setSelectingForType('MASTER'); setIsConnManagerOpen(true); }}
-                                                            className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.master ? 'bg-blue-900/20 text-blue-300 border-blue-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
-                                                        >
-                                                            {ownerMappings[owner]?.master ? `${ownerMappings[owner].master!.name} (${ownerMappings[owner].master!.host})` : 'Select Master'}
-                                                        </button>
-                                                    )}
-                                                </td>
-                                                <td className="p-3">
-                                                    {isAutoMapping ? (
-                                                        <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => { setSelectingForOwner(owner); setSelectingForType('SLAVE'); setIsConnManagerOpen(true); }}
-                                                            className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border ${ownerMappings[owner]?.slave ? 'bg-purple-900/20 text-purple-300 border-purple-500/30' : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'}`}
-                                                        >
-                                                            {ownerMappings[owner]?.slave ? `${ownerMappings[owner].slave!.name} (${ownerMappings[owner].slave!.host})` : 'Select Slave'}
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {Array.from(excelOwners).map(owner => {
+                                            const isSkipped = skippedOwners.has(owner);
+                                            return (
+                                                <tr key={owner} className={`hover:bg-zinc-800/30 transition-opacity ${isSkipped ? 'opacity-50 grayscale bg-zinc-950' : ''}`}>
+                                                    <td className="p-3 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!isSkipped}
+                                                            onChange={() => {
+                                                                const next = new Set(skippedOwners);
+                                                                if (isSkipped) next.delete(owner);
+                                                                else next.add(owner);
+                                                                setSkippedOwners(next);
+                                                            }}
+                                                            className="w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                    <td className="p-3 font-mono text-emerald-400 font-bold">{owner}</td>
+                                                    <td className="p-3">
+                                                        {isAutoMapping ? (
+                                                            <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => { setSelectingForOwner(owner); setSelectingForType('MASTER'); setIsConnManagerOpen(true); }}
+                                                                disabled={isSkipped}
+                                                                className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border transition-colors ${ownerMappings[owner]?.master
+                                                                    ? 'bg-blue-900/20 text-blue-300 border-blue-500/30 hover:bg-blue-900/40'
+                                                                    : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                                                                    } ${isSkipped ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                            >
+                                                                {ownerMappings[owner]?.master ? `${ownerMappings[owner].master!.name} (${ownerMappings[owner].master!.host})` : 'Select Master'}
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3">
+                                                        {isAutoMapping ? (
+                                                            <div className="w-full h-8 bg-zinc-800/50 rounded animate-pulse" />
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => { setSelectingForOwner(owner); setSelectingForType('SLAVE'); setIsConnManagerOpen(true); }}
+                                                                disabled={isSkipped}
+                                                                className={`text-xs px-2 py-1.5 rounded w-full text-left truncate border transition-colors ${ownerMappings[owner]?.slave
+                                                                    ? 'bg-purple-900/20 text-purple-300 border-purple-500/30 hover:bg-purple-900/40'
+                                                                    : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                                                                    } ${isSkipped ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                            >
+                                                                {ownerMappings[owner]?.slave ? `${ownerMappings[owner].slave!.name} (${ownerMappings[owner].slave!.host})` : 'Select Slave'}
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
