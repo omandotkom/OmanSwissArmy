@@ -69,6 +69,10 @@ export default function TwoWayComparisonPage() {
     } | null>(null);
     const [isCompiling, setIsCompiling] = useState(false);
 
+    // -- PREFERENCES --
+    const [masterKeyword, setMasterKeyword] = useState("");
+    const [slaveKeyword, setSlaveKeyword] = useState("");
+
     // Optimized Filtering with Memoization
     const filteredData = useMemo(() => {
         return previewData.filter(row => {
@@ -90,6 +94,66 @@ export default function TwoWayComparisonPage() {
     useEffect(() => {
         getAllConnections().then(setAvailableConnections);
     }, []);
+
+    // Auto-Mapping Logic
+    useEffect(() => {
+        if (availableConnections.length === 0 || targetOwners.size === 0) return;
+
+        setOwnerMappings(prev => {
+            const next = { ...prev };
+            let changed = false;
+
+            targetOwners.forEach(owner => {
+                const oName = owner.toUpperCase();
+
+                // Helper to score connection
+                const findBest = (keyword: string) => {
+                    const kw = keyword.toUpperCase().trim();
+                    const candidates = availableConnections.filter(c => {
+                        const cName = c.name.toUpperCase();
+                        const cUser = c.username.toUpperCase();
+                        // Heuristic: Must somewhat relate to Owner or be a generic DB
+                        return cUser === oName || cUser.includes(oName) || cName.includes(oName);
+                    });
+
+                    if (candidates.length === 0) return null;
+
+                    return candidates.sort((a, b) => {
+                        let scoreA = (a.username.toUpperCase() === oName ? 100 : 0) +
+                            (a.username.toUpperCase().includes(oName) ? 50 : 0) +
+                            (a.name.toUpperCase().includes(oName) ? 20 : 0);
+                        let scoreB = (b.username.toUpperCase() === oName ? 100 : 0) +
+                            (b.username.toUpperCase().includes(oName) ? 50 : 0) +
+                            (b.name.toUpperCase().includes(oName) ? 20 : 0);
+
+                        if (kw) {
+                            if (a.name.toUpperCase().includes(kw) || a.host.toUpperCase().includes(kw)) scoreA += 500;
+                            if (b.name.toUpperCase().includes(kw) || b.host.toUpperCase().includes(kw)) scoreB += 500;
+                        }
+                        return scoreB - scoreA;
+                    })[0];
+                };
+
+                const bestMaster = findBest(masterKeyword);
+                const bestSlave = findBest(slaveKeyword);
+
+                // Initialize object if missing
+                if (!next[owner]) next[owner] = { master: null, slave: null };
+
+                if (bestMaster && next[owner].master?.id !== bestMaster.id) {
+                    next[owner] = { ...next[owner], master: bestMaster };
+                    changed = true;
+                }
+                if (bestSlave && next[owner].slave?.id !== bestSlave.id) {
+                    next[owner] = { ...next[owner], slave: bestSlave };
+                    changed = true;
+                }
+            });
+
+            return changed ? next : prev;
+        });
+
+    }, [availableConnections, targetOwners, masterKeyword, slaveKeyword]);
 
     // Auto-scroll logs
     useEffect(() => {
@@ -501,6 +565,30 @@ export default function TwoWayComparisonPage() {
                             <Database className="text-blue-500" /> 2. Connection Mapping
                         </h2>
 
+                        {/* Keyword Preference Inputs */}
+                        <div className="flex gap-4 mb-4 bg-zinc-950 px-4 py-3 rounded-lg border border-zinc-800/80">
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Master Preference (Keyword)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. PROD"
+                                    value={masterKeyword}
+                                    onChange={(e) => setMasterKeyword(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-zinc-500 uppercase mb-1">Slave Preference (Keyword)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. DR"
+                                    value={slaveKeyword}
+                                    onChange={(e) => setSlaveKeyword(e.target.value)}
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500 outline-none"
+                                />
+                            </div>
+                        </div>
+
                         {targetOwners.size === 0 ? (
                             <div className="flex-1 flex items-center justify-center text-zinc-500 italic border border-zinc-800/50 rounded-lg bg-zinc-950/30 p-8">
                                 Add Schema first to configure connections.
@@ -624,7 +712,11 @@ export default function TwoWayComparisonPage() {
                             <button onClick={() => setIsConnManagerOpen(false)}><X className="text-zinc-500" /></button>
                         </div>
                         <div className="p-4">
-                            <ConnectionManager isOpen={true} onClose={() => setIsConnManagerOpen(false)} onSelect={handleConnSelect} />
+                            <ConnectionManager
+                                isOpen={true}
+                                onClose={() => setIsConnManagerOpen(false)}
+                                onSelect={handleConnSelect}
+                            />
                         </div>
                     </div>
                 </div>
