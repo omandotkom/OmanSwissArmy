@@ -16,7 +16,8 @@ export class OcClient {
         console.log(`Executing: ${command}`);
 
         try {
-            const { stdout, stderr } = await execAsync(command);
+            // Increase maxBuffer to 50MB to handle large JSON outputs (like pipelinerun lists)
+            const { stdout, stderr } = await execAsync(command, { maxBuffer: 50 * 1024 * 1024 });
             if (stderr && !stdout) {
                 console.warn('OC Stderr:', stderr);
             }
@@ -327,6 +328,37 @@ spec:
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
             throw e;
         }
+    }
+
+    async getPipelineRuns(namespace: string): Promise<any[]> {
+        try {
+            const output = await this.runCommand(['get', 'pipelinerun', '-n', namespace, '-o', 'json']);
+            const data = JSON.parse(output);
+            console.log(`[OcHelper] Parsed ${data.items?.length} items from ${namespace}`);
+            return data.items || [];
+        } catch (e: any) {
+            console.error(`[OcHelper] Failed to get pipelineruns in ${namespace}:`, e.message);
+            // Look for "No resources found" or similar standard k8s messages which aren't strictly errors but empty states
+            if (e.message?.includes('No resources found')) return [];
+            return [];
+        }
+    }
+
+    async getPipelineRunDetails(namespace: string, name: string): Promise<any> {
+        const output = await this.runCommand(['get', 'pipelinerun', name, '-n', namespace, '-o', 'json']);
+        return JSON.parse(output);
+    }
+
+    async getPodLogs(namespace: string, podName: string, containerName?: string): Promise<string> {
+        const args = ['logs', podName, '-n', namespace];
+        if (containerName) {
+            args.push('-c', containerName);
+        }
+        return this.runCommand(args);
+    }
+
+    async deletePipelineRun(namespace: string, name: string): Promise<void> {
+        await this.runCommand(['delete', 'pipelinerun', name, '-n', namespace]);
     }
 }
 

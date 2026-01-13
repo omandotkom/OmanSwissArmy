@@ -162,6 +162,13 @@ export const toolGroups: ToolGroup[] = [
                 title: "S3 Browser",
                 description: "Browse and manage S3-compatible buckets.",
             },
+            {
+                href: "/pipelinerun-explorer",
+                title: "PipelineRun Explorer",
+                description: "Explore and debug Tekton PipelineRuns on OpenShift.",
+                dependency: "oc",
+                isNew: true,
+            },
         ],
     },
     {

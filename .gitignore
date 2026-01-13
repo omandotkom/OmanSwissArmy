@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Large AI Models (Downloaded via start.bat)
 public/models/qwen25coder/
+
+# Temporary Jobs
+temp_jobs/
