@@ -905,16 +905,18 @@ export default function TwoWayComparisonPage() {
                                     language="sql" options={{ readOnly: true, renderSideBySide: true }}
                                 />
                                 {/* Overlay Buttons for Compilation */}
-                                {currentDiffObject && currentDiffObject.type !== 'TABLE' && (
+                                {currentDiffObject && (
                                     <>
                                         <div className="absolute top-0 left-0 w-1/2 p-2 pointer-events-none flex justify-between px-8 z-10">
                                             <div className="pointer-events-auto">
-                                                <button
-                                                    onClick={() => initiateCompile('master_to_slave')}
-                                                    className="bg-zinc-800/80 hover:bg-emerald-600/80 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
-                                                >
-                                                    Push to Slave <ArrowLeft className="w-3 h-3 rotate-180" />
-                                                </button>
+                                                {currentDiffObject.type !== 'TABLE' && (
+                                                    <button
+                                                        onClick={() => initiateCompile('master_to_slave')}
+                                                        className="bg-zinc-800/80 hover:bg-emerald-600/80 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        Push to Slave <ArrowLeft className="w-3 h-3 rotate-180" />
+                                                    </button>
+                                                )}
                                             </div>
                                             <span className="bg-zinc-800/80 text-emerald-400 text-xs px-2 py-1 rounded backdrop-blur-sm border border-emerald-500/20 shadow-sm">
                                                 MASTER: {currentDiffObject ? ownerMappings[currentDiffObject.owner]?.master?.name : ''}
@@ -922,12 +924,14 @@ export default function TwoWayComparisonPage() {
                                         </div>
                                         <div className="absolute top-0 right-0 w-1/2 p-2 pointer-events-none flex justify-between px-8 z-10 flex-row-reverse">
                                             <div className="pointer-events-auto">
-                                                <button
-                                                    onClick={() => initiateCompile('slave_to_master')}
-                                                    className="bg-zinc-800/80 hover:bg-blue-600/80 text-blue-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <ArrowLeft className="w-3 h-3" /> Push to Master
-                                                </button>
+                                                {currentDiffObject.type !== 'TABLE' && (
+                                                    <button
+                                                        onClick={() => initiateCompile('slave_to_master')}
+                                                        className="bg-zinc-800/80 hover:bg-blue-600/80 text-blue-400 hover:text-white text-xs px-3 py-1.5 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                                                    >
+                                                        <ArrowLeft className="w-3 h-3" /> Push to Master
+                                                    </button>
+                                                )}
                                             </div>
                                             <span className="bg-zinc-800/80 text-blue-400 text-xs px-2 py-1 rounded backdrop-blur-sm border border-blue-500/20 shadow-sm">
                                                 SLAVE: {currentDiffObject ? ownerMappings[currentDiffObject.owner]?.slave?.name : ''}
