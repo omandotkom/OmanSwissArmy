@@ -742,7 +742,10 @@ export default function TwoWayComparisonPage() {
                             <div className="flex items-center gap-3">
                                 {Object.keys(columnFilters).some(k => columnFilters[k]) && (
                                     <button
-                                        onClick={() => setColumnFilters({})}
+                                        onClick={() => {
+                                            setColumnFilters({});
+                                            trackActivity({ action: "TWO_WAY_CLEAR_FILTERS", label: "Preview Modal" });
+                                        }}
                                         className="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 hover:text-white flex items-center gap-2"
                                     >
                                         <X className="w-3 h-3" /> Clear Filters
@@ -774,7 +777,10 @@ export default function TwoWayComparisonPage() {
                                         </>
                                     )}
                                 </button>
-                                <button onClick={() => setViewModalOpen(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                                <button onClick={() => {
+                                    setViewModalOpen(false);
+                                    trackActivity({ action: "TWO_WAY_CLOSE_PREVIEW", label: "Preview Modal" });
+                                }} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
                                     <X className="h-6 w-6" />
                                 </button>
                             </div>
@@ -801,6 +807,15 @@ export default function TwoWayComparisonPage() {
                                                                 onChange={e => {
                                                                     setColumnFilters(prev => ({ ...prev, [h]: e.target.value }));
                                                                     setPreviewPage(1);
+                                                                }}
+                                                                onBlur={(e) => {
+                                                                    if (e.target.value) {
+                                                                        trackActivity({
+                                                                            action: "TWO_WAY_FILTER_COLUMN",
+                                                                            label: h,
+                                                                            details: `Value: ${e.target.value}`
+                                                                        });
+                                                                    }
                                                                 }}
                                                             />
                                                         </div>
@@ -844,7 +859,10 @@ export default function TwoWayComparisonPage() {
                             </div>
                             <div className="flex gap-2 items-center">
                                 <button
-                                    onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
+                                    onClick={() => {
+                                        setPreviewPage(p => Math.max(1, p - 1));
+                                        trackActivity({ action: "TWO_WAY_PAGINATION", label: "Previous", details: `Page: ${previewPage - 1}` });
+                                    }}
                                     disabled={previewPage === 1}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${previewPage === 1
                                         ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
@@ -857,6 +875,7 @@ export default function TwoWayComparisonPage() {
                                 <button
                                     onClick={() => {
                                         setPreviewPage(p => Math.min(Math.ceil(filteredData.length / 100), p + 1));
+                                        trackActivity({ action: "TWO_WAY_PAGINATION", label: "Next", details: `Page: ${previewPage + 1}` });
                                     }}
                                     disabled={(previewPage * 100) >= filteredData.length}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(previewPage * 100) >= filteredData.length
@@ -894,7 +913,10 @@ export default function TwoWayComparisonPage() {
                                     }}>
                                     <FileSpreadsheet className="w-3 h-3" /> Download Patch
                                 </button>
-                                <button onClick={() => setIsDiffModalOpen(false)}><X className="text-zinc-400 hover:text-white" /></button>
+                                <button onClick={() => {
+                                    setIsDiffModalOpen(false);
+                                    trackActivity({ action: "TWO_WAY_CLOSE_DIFF", label: "Diff Modal" });
+                                }}><X className="text-zinc-400 hover:text-white" /></button>
                             </div>
                         </div>
                         <div className="flex-1 relative bg-[#1e1e1e] flex flex-col group">

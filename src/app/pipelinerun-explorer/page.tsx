@@ -430,7 +430,10 @@ function PipelineRunExplorerContent() {
                     </div>
                     <div>
                         <button
-                            onClick={() => setPruneModalOpen(true)}
+                            onClick={() => {
+                                setPruneModalOpen(true);
+                                trackActivity({ action: "OPEN_PRUNE_MODAL", label: "PipelineRun Explorer" });
+                            }}
                             disabled={!selectedProject}
                             className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-500 hover:text-red-400 rounded-lg border border-red-600/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -454,6 +457,7 @@ function PipelineRunExplorerContent() {
                                 placeholder="Started By (user)..."
                                 value={filterStartedBy}
                                 onChange={(e) => setFilterStartedBy(e.target.value)}
+                                onBlur={() => filterStartedBy && trackActivity({ action: "FILTER_STARTED_BY", label: filterStartedBy })}
                                 className="pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-48 transition-colors"
                             />
                             {filterStartedBy && <button onClick={() => setFilterStartedBy('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={12} /></button>}
@@ -467,6 +471,7 @@ function PipelineRunExplorerContent() {
                                 placeholder="PVC Name..."
                                 value={filterPvc}
                                 onChange={(e) => setFilterPvc(e.target.value)}
+                                onBlur={() => filterPvc && trackActivity({ action: "FILTER_PVC", label: filterPvc })}
                                 className="pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-48 transition-colors"
                             />
                             {filterPvc && <button onClick={() => setFilterPvc('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={12} /></button>}
@@ -475,7 +480,10 @@ function PipelineRunExplorerContent() {
                         {/* Status Filter */}
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
+                            onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                if (e.target.value) trackActivity({ action: "FILTER_STATUS", label: e.target.value });
+                            }}
                             className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-slate-200 focus:border-blue-500 focus:outline-none transition-colors"
                         >
                             <option value="">All Statuses</option>
@@ -486,7 +494,12 @@ function PipelineRunExplorerContent() {
 
                         {(filterStartedBy || filterPvc || filterStatus) && (
                             <button
-                                onClick={() => { setFilterStartedBy(''); setFilterPvc(''); setFilterStatus(''); }}
+                                onClick={() => {
+                                    setFilterStartedBy('');
+                                    setFilterPvc('');
+                                    setFilterStatus('');
+                                    trackActivity({ action: "CLEAR_FILTERS", label: "PipelineRun Explorer" });
+                                }}
                                 className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors ml-auto"
                             >
                                 Clear All
@@ -736,7 +749,10 @@ function PipelineRunExplorerContent() {
                                             />
                                         </div>
                                         <button
-                                            onClick={() => handlePrune({ keepCount })}
+                                            onClick={() => {
+                                                handlePrune({ keepCount });
+                                                trackActivity({ action: "CLICK_PRUNE_RETENTION", label: "Prune Modal", details: { keepCount } });
+                                            }}
                                             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
                                         >
                                             Prune Others
@@ -749,21 +765,30 @@ function PipelineRunExplorerContent() {
                                     <label className="text-sm font-semibold text-slate-200 block">2. Quick Cleanup by Status</label>
                                     <div className="grid grid-cols-2 gap-3">
                                         <button
-                                            onClick={() => handlePrune({ strategy: 'by-status', statuses: ['Failed'] })}
+                                            onClick={() => {
+                                                handlePrune({ strategy: 'by-status', statuses: ['Failed'] });
+                                                trackActivity({ action: "CLICK_PRUNE_FAILED", label: "Prune Modal" });
+                                            }}
                                             className="p-3 bg-red-950/20 hover:bg-red-900/30 border border-red-900/40 rounded-lg flex items-center justify-between group transition-colors"
                                         >
                                             <span className="text-xs font-medium text-red-400 group-hover:text-red-300">Delete Failed</span>
                                             <Trash2 size={14} className="text-red-500/50 group-hover:text-red-400" />
                                         </button>
                                         <button
-                                            onClick={() => handlePrune({ strategy: 'by-status', statuses: ['Cancelled'] })}
+                                            onClick={() => {
+                                                handlePrune({ strategy: 'by-status', statuses: ['Cancelled'] });
+                                                trackActivity({ action: "CLICK_PRUNE_CANCELLED", label: "Prune Modal" });
+                                            }}
                                             className="p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-between group transition-colors"
                                         >
                                             <span className="text-xs font-medium text-slate-400 group-hover:text-slate-300">Delete Cancelled</span>
                                             <Trash2 size={14} className="text-slate-500/50 group-hover:text-slate-400" />
                                         </button>
                                         <button
-                                            onClick={() => handlePrune({ strategy: 'by-status', statuses: ['PipelineRunTimeout'] })}
+                                            onClick={() => {
+                                                handlePrune({ strategy: 'by-status', statuses: ['PipelineRunTimeout'] });
+                                                trackActivity({ action: "CLICK_PRUNE_TIMEOUT", label: "Prune Modal" });
+                                            }}
                                             className="p-3 bg-amber-950/20 hover:bg-amber-900/30 border border-amber-900/40 rounded-lg flex items-center justify-between group transition-colors col-span-2"
                                         >
                                             <div className="flex items-center gap-2">
@@ -791,7 +816,10 @@ function PipelineRunExplorerContent() {
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">days</span>
                                         </div>
                                         <button
-                                            onClick={() => handlePrune({ strategy: 'older-than', days: pruneDays })}
+                                            onClick={() => {
+                                                handlePrune({ strategy: 'older-than', days: pruneDays });
+                                                trackActivity({ action: "CLICK_PRUNE_OLDER_THAN", label: "Prune Modal", details: { days: pruneDays } });
+                                            }}
                                             className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-medium rounded-lg border border-red-600/30 transition-colors whitespace-nowrap"
                                         >
                                             Delete Older Runs
@@ -836,7 +864,11 @@ function PipelineRunExplorerContent() {
                                     )}
                                 </div>
                                 <button
-                                    onClick={() => { setPruneModalOpen(false); setPruneResult(null); }}
+                                    onClick={() => {
+                                        setPruneModalOpen(false);
+                                        setPruneResult(null);
+                                        trackActivity({ action: "CLOSE_PRUNE_RESULT", label: "Prune Modal" });
+                                    }}
                                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors font-medium"
                                 >
                                     Close
