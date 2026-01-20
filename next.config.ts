@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
   },
   output: "standalone",
+  serverExternalPackages: ["ldapjs", "oracledb"],
   /* config options here */
   /* config options here */
   webpack: (config, { isServer }) => {
