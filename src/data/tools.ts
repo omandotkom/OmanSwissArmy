@@ -107,6 +107,12 @@ export const toolGroups: ToolGroup[] = [
                 description: "Deploy and manage Oracle DB objects.",
             },
             {
+                href: "/oracle-job-visualizer",
+                title: "Oracle Job Visualizer",
+                description: "Visualize scheduler jobs and recursive dependencies.",
+                isNew: true,
+            },
+            {
                 href: "/gitea-browser",
                 title: "Gitea Browser",
                 description: "Browse repositories from your Gitea instance.",
@@ -151,6 +157,12 @@ export const toolGroups: ToolGroup[] = [
                 description: "Scan entire cluster for zombie PVCs across all namespaces.",
                 isNew: true,
                 dependency: "oc",
+            },
+            {
+                href: "/ad-explorer",
+                title: "Active Directory Explorer",
+                description: "Browse and inspect LDAP/Active Directory objects.",
+                isNew: true,
             },
             {
                 href: "/openshift-resource-converter",

@@ -4,7 +4,8 @@ const DB_NAME = 'OmanSwissArmyDB';
 const STORE_ORACLE = 'oracle_connections';
 const STORE_S3 = 's3_connections';
 const STORE_GITEA = 'gitea_connections';
-const DB_VERSION = 3; // Bump version for Gitea Store
+const STORE_LDAP = 'ldap_connections';
+const DB_VERSION = 4; // Bump version for LDAP Store
 
 export interface OracleConnection {
     id: string; // uuid
@@ -15,6 +16,15 @@ export interface OracleConnection {
     username: string;
     password?: string; // Optional, encrypted when stored
     color?: string; // Visual tag
+}
+
+export interface LdapConnection {
+    id: string; // uuid
+    name: string;
+    url: string;
+    username: string;
+    password?: string;
+    baseDN: string;
 }
 
 export interface GiteaConnection {
@@ -61,6 +71,9 @@ export const initDB = (): Promise<IDBDatabase> => {
             }
             if (!db.objectStoreNames.contains(STORE_GITEA)) {
                 db.createObjectStore(STORE_GITEA, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_LDAP)) {
+                db.createObjectStore(STORE_LDAP, { keyPath: 'id' });
             }
         };
     });
@@ -260,6 +273,58 @@ export const deleteGiteaConnection = async (id: string): Promise<void> => {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_GITEA], 'readwrite');
         const store = transaction.objectStore(STORE_GITEA);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+// --- LDAP FUNCTIONS ---
+
+export const saveLdapConnection = async (connection: LdapConnection): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_LDAP], 'readwrite');
+        const store = transaction.objectStore(STORE_LDAP);
+
+        const encryptedPayload = encryptData(connection);
+        const itemToSave: EncryptedStorageItem = {
+            id: connection.id,
+            payload: encryptedPayload
+        };
+
+        const request = store.put(itemToSave);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const getAllLdapConnections = async (): Promise<LdapConnection[]> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_LDAP], 'readonly');
+        const store = transaction.objectStore(STORE_LDAP);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const results: LdapConnection[] = [];
+            request.result.forEach((item: any) => {
+                if (item.payload && typeof item.payload === 'string') {
+                    const decrypted = decryptData(item.payload);
+                    if (decrypted) results.push(decrypted);
+                }
+            });
+            resolve(results);
+        };
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const deleteLdapConnection = async (id: string): Promise<void> => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_LDAP], 'readwrite');
+        const store = transaction.objectStore(STORE_LDAP);
         const request = store.delete(id);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
