@@ -5,7 +5,7 @@ import {
     Folder, File, ArrowLeft, RefreshCw, Download, Cloud, LogOut, Database,
     ChevronRight, HardDrive, BarChart2, AlertCircle, Plus, Save, Trash2,
     Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud,
-    Filter
+    Filter, Search
 } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
@@ -96,6 +96,10 @@ export default function S3BrowserPage() {
     // Filter
     const [typeFilter, setTypeFilter] = useState<'all' | 'folder' | 'file'>('all');
 
+    // Server-side prefix search
+    const [searchQuery, setSearchQuery] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
+
     // Analytics
     const [usageLoading, setUsageLoading] = useState(false);
     const [bucketUsage, setBucketUsage] = useState<BucketUsage | null>(null);
@@ -143,6 +147,23 @@ export default function S3BrowserPage() {
             localStorage.setItem('s3-browser-page-size', String(pageSize));
         } catch { /* ignore */ }
     }, [pageSize]);
+
+    // Debounced server-side prefix search.
+    // When user types, wait 400ms then re-fetch with the search term applied.
+    useEffect(() => {
+        if (!isConnected || !selectedBucket) return;
+        if (searchQuery === appliedSearch) return; // nothing to do
+
+        const timer = setTimeout(() => {
+            setAppliedSearch(searchQuery);
+            fetchFiles(selectedBucket, currentPrefix, 'replace', undefined, searchQuery);
+            if (searchQuery) {
+                trackActivity({ action: "S3_SEARCH", label: `${selectedBucket}/${currentPrefix}`, details: { query: searchQuery } });
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery]);
 
     const loadProfiles = async () => {
         try {
@@ -313,6 +334,8 @@ export default function S3BrowserPage() {
         setFormConfig({ endpoint: '', region: 'us-east-1', accessKeyId: '', secretAccessKey: '' });
         setNextToken(null);
         setIsTruncated(false);
+        setSearchQuery('');
+        setAppliedSearch('');
         trackActivity({ action: "S3_DISCONNECT", label: "User Disconnect" });
     };
 
@@ -320,7 +343,8 @@ export default function S3BrowserPage() {
         bucket: string,
         prefix: string,
         mode: 'replace' | 'append' = 'replace',
-        token?: string
+        token?: string,
+        search: string = ''
     ) => {
         if (mode === 'replace') {
             setBrowsingLoading(true);
@@ -339,7 +363,8 @@ export default function S3BrowserPage() {
                     bucketName: bucket,
                     prefix,
                     continuationToken: mode === 'append' ? token : undefined,
-                    maxKeys: pageSize
+                    maxKeys: pageSize,
+                    searchPrefix: search
                 })
             });
             const data = await res.json();
@@ -372,7 +397,7 @@ export default function S3BrowserPage() {
 
     const loadMoreFiles = () => {
         if (!nextToken || loadingMore || browsingLoading) return;
-        fetchFiles(selectedBucket, currentPrefix, 'append', nextToken);
+        fetchFiles(selectedBucket, currentPrefix, 'append', nextToken, appliedSearch);
         trackActivity({ action: "S3_LOAD_MORE", label: `${selectedBucket}/${currentPrefix}` });
     };
 
@@ -380,7 +405,9 @@ export default function S3BrowserPage() {
         setSelectedBucket(bucketName);
         setCurrentPrefix('');
         setBucketUsage(null);
-        fetchFiles(bucketName, '');
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(bucketName, '', 'replace', undefined, '');
         trackActivity({ action: "SELECT_BUCKET", label: bucketName });
     };
 
@@ -388,7 +415,9 @@ export default function S3BrowserPage() {
     const handleFolderClick = (folderName: string) => {
         const newPrefix = currentPrefix + folderName + '/';
         setCurrentPrefix(newPrefix);
-        fetchFiles(selectedBucket, newPrefix);
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(selectedBucket, newPrefix, 'replace', undefined, '');
         trackActivity({ action: "NAVIGATE_S3_FOLDER", label: folderName });
     };
 
@@ -398,7 +427,9 @@ export default function S3BrowserPage() {
         const lastSlash = p.lastIndexOf('/');
         const newPrefix = lastSlash === -1 ? '' : p.substring(0, lastSlash + 1);
         setCurrentPrefix(newPrefix);
-        fetchFiles(selectedBucket, newPrefix);
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(selectedBucket, newPrefix, 'replace', undefined, '');
     };
 
     const handleDownload = async (fileKey: string) => {
@@ -622,7 +653,7 @@ export default function S3BrowserPage() {
         setIsUploading(false);
         setUploadProgress(null);
         if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
-        fetchFiles(selectedBucket, currentPrefix); // Refresh list
+        fetchFiles(selectedBucket, currentPrefix, 'replace', undefined, appliedSearch); // Refresh list (preserves active search)
         trackActivity({ action: "UPLOAD_FILES", label: selectedBucket, details: { count: fileList.length } });
     };
 
@@ -861,16 +892,38 @@ export default function S3BrowserPage() {
                                     </button>
                                 </div>
 
-                                {/* Breadcrumb + Type Filter */}
+                                {/* Breadcrumb + Search + Type Filter */}
                                 <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-3 text-sm overflow-x-auto">
                                     <div className="flex items-center gap-1 flex-1 min-w-0">
-                                        <button onClick={() => fetchFiles(selectedBucket, '')} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
+                                        <button onClick={() => { setCurrentPrefix(''); setSearchQuery(''); setAppliedSearch(''); fetchFiles(selectedBucket, '', 'replace', undefined, ''); }} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
                                         {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
                                             <React.Fragment key={i}>
                                                 <ChevronRight size={14} className="text-slate-600" />
                                                 <span className={`px-1 rounded ${i === arr.length - 1 ? 'text-slate-200 font-bold' : 'text-slate-400'}`}>{part}</span>
                                             </React.Fragment>
                                         ))}
+                                    </div>
+
+                                    {/* Server-side prefix search */}
+                                    <div className="shrink-0 relative" title="Server-side prefix search within current folder. Matches keys that start with this text.">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder="Filter by prefix..."
+                                            disabled={isUploading}
+                                            className="bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-8 py-1.5 text-slate-200 text-xs focus:ring-2 focus:ring-orange-500 outline-none w-56 placeholder:text-slate-600 disabled:opacity-50"
+                                        />
+                                        {searchQuery && (
+                                            <button
+                                                onClick={() => setSearchQuery('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
+                                                title="Clear search"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Type Filter Segmented Control */}
@@ -925,7 +978,11 @@ export default function S3BrowserPage() {
                                             )}
                                             {files.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">Folder is empty</td>
+                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">
+                                                        {appliedSearch ? (
+                                                            <>No items match prefix &ldquo;<span className="text-slate-400 not-italic font-mono">{appliedSearch}</span>&rdquo; in this folder</>
+                                                        ) : 'Folder is empty'}
+                                                    </td>
                                                 </tr>
                                             )}
                                             {files.length > 0 && files.filter(f => typeFilter === 'all' || (typeFilter === 'folder' ? f.isDirectory : !f.isDirectory)).length === 0 && (
