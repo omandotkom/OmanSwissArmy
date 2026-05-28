@@ -44,14 +44,21 @@ export class S3Service {
         return response.Buckets || [];
     }
 
-    async listFiles(bucketName: string, prefix: string = '') {
+    async listFiles(
+        bucketName: string,
+        prefix: string = '',
+        continuationToken?: string,
+        maxKeys: number = 1000
+    ) {
         // Ensure prefix ends with / if it's not empty, to simulate folders
         const cleanPrefix = prefix === '' || prefix === '/' ? '' : (prefix.endsWith('/') ? prefix : `${prefix}/`);
 
         const command = new ListObjectsV2Command({
             Bucket: bucketName,
             Prefix: cleanPrefix,
-            Delimiter: '/'
+            Delimiter: '/',
+            MaxKeys: maxKeys,
+            ContinuationToken: continuationToken
         });
 
         const response = await this.client.send(command);
@@ -85,7 +92,11 @@ export class S3Service {
             }
         });
 
-        return items;
+        return {
+            items,
+            nextContinuationToken: response.NextContinuationToken || null,
+            isTruncated: !!response.IsTruncated
+        };
     }
 
     async getFilePresignedUrl(bucketName: string, key: string) {

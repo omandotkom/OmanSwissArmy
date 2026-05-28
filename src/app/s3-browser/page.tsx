@@ -87,6 +87,11 @@ export default function S3BrowserPage() {
     const [files, setFiles] = useState<S3FileItem[]>([]);
     const [browsingLoading, setBrowsingLoading] = useState(false);
 
+    // Pagination
+    const [nextToken, setNextToken] = useState<string | null>(null);
+    const [isTruncated, setIsTruncated] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+
     // Filter
     const [typeFilter, setTypeFilter] = useState<'all' | 'folder' | 'file'>('all');
 
@@ -285,11 +290,22 @@ export default function S3BrowserPage() {
         setIsEditingProfile(false);
         setFormName('');
         setFormConfig({ endpoint: '', region: 'us-east-1', accessKeyId: '', secretAccessKey: '' });
+        setNextToken(null);
+        setIsTruncated(false);
         trackActivity({ action: "S3_DISCONNECT", label: "User Disconnect" });
     };
 
-    const fetchFiles = async (bucket: string, prefix: string) => {
-        setBrowsingLoading(true);
+    const fetchFiles = async (
+        bucket: string,
+        prefix: string,
+        mode: 'replace' | 'append' = 'replace',
+        token?: string
+    ) => {
+        if (mode === 'replace') {
+            setBrowsingLoading(true);
+        } else {
+            setLoadingMore(true);
+        }
         try {
             const profile = profiles.find(p => p.id === activeProfileId);
             const cfg = profile ? profile.config : formConfig;
@@ -297,19 +313,45 @@ export default function S3BrowserPage() {
             const res = await fetch('/api/s3/files', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...cfg, bucketName: bucket, prefix })
+                body: JSON.stringify({
+                    ...cfg,
+                    bucketName: bucket,
+                    prefix,
+                    continuationToken: mode === 'append' ? token : undefined
+                })
             });
             const data = await res.json();
             if (res.ok) {
-                setFiles(data.files || []);
-            } else {
+                const items = data.files || [];
+                if (mode === 'replace') {
+                    setFiles(items);
+                } else {
+                    setFiles(prev => [...prev, ...items]);
+                }
+                setNextToken(data.nextContinuationToken || null);
+                setIsTruncated(!!data.isTruncated);
+            } else if (mode === 'replace') {
                 setFiles([]);
+                setNextToken(null);
+                setIsTruncated(false);
             }
         } catch (err) {
             console.error(err);
+            if (mode === 'replace') {
+                setFiles([]);
+                setNextToken(null);
+                setIsTruncated(false);
+            }
         } finally {
             setBrowsingLoading(false);
+            setLoadingMore(false);
         }
+    };
+
+    const loadMoreFiles = () => {
+        if (!nextToken || loadingMore || browsingLoading) return;
+        fetchFiles(selectedBucket, currentPrefix, 'append', nextToken);
+        trackActivity({ action: "S3_LOAD_MORE", label: `${selectedBucket}/${currentPrefix}` });
     };
 
     const handleBucketSelect = (bucketName: string) => {
@@ -905,6 +947,48 @@ export default function S3BrowserPage() {
                                             ))}
                                         </tbody>
                                     </table>
+                                )}
+
+                                {/* Pagination Footer */}
+                                {!browsingLoading && files.length > 0 && (
+                                    <div className="mt-3 px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center justify-between text-xs">
+                                        <div className="text-slate-400 flex items-center gap-2 flex-wrap">
+                                            <span>
+                                                <span className="text-slate-200 font-mono font-bold">{files.length.toLocaleString()}</span>{' '}
+                                                {files.length === 1 ? 'item' : 'items'} loaded
+                                            </span>
+                                            {typeFilter !== 'all' && (() => {
+                                                const visible = files.filter(f => typeFilter === 'folder' ? f.isDirectory : !f.isDirectory).length;
+                                                return (
+                                                    <span className="text-slate-500">
+                                                        · <span className="text-orange-400 font-mono">{visible.toLocaleString()}</span> visible after filter
+                                                    </span>
+                                                );
+                                            })()}
+                                            {isTruncated && (
+                                                <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] uppercase tracking-wider font-bold">
+                                                    More available
+                                                </span>
+                                            )}
+                                            {!isTruncated && (
+                                                <span className="text-slate-500 italic">· all loaded</span>
+                                            )}
+                                        </div>
+                                        {isTruncated && (
+                                            <button
+                                                onClick={loadMoreFiles}
+                                                disabled={loadingMore}
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-wait text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
+                                                title="Fetch the next batch of items"
+                                            >
+                                                {loadingMore ? (
+                                                    <><RefreshCw className="animate-spin" size={14} /> Loading…</>
+                                                ) : (
+                                                    <>Load More <ChevronRight size={14} /></>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </>
