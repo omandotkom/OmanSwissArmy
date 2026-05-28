@@ -91,6 +91,7 @@ export default function S3BrowserPage() {
     const [nextToken, setNextToken] = useState<string | null>(null);
     const [isTruncated, setIsTruncated] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [pageSize, setPageSize] = useState<number>(1000);
 
     // Filter
     const [typeFilter, setTypeFilter] = useState<'all' | 'folder' | 'file'>('all');
@@ -122,6 +123,26 @@ export default function S3BrowserPage() {
     useEffect(() => {
         loadProfiles();
     }, []);
+
+    // Restore preferred page size from localStorage on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('s3-browser-page-size');
+            if (saved) {
+                const n = Number(saved);
+                if ([100, 250, 500, 1000].includes(n)) {
+                    setPageSize(n);
+                }
+            }
+        } catch { /* localStorage may be unavailable */ }
+    }, []);
+
+    // Persist page size when changed
+    useEffect(() => {
+        try {
+            localStorage.setItem('s3-browser-page-size', String(pageSize));
+        } catch { /* ignore */ }
+    }, [pageSize]);
 
     const loadProfiles = async () => {
         try {
@@ -317,7 +338,8 @@ export default function S3BrowserPage() {
                     ...cfg,
                     bucketName: bucket,
                     prefix,
-                    continuationToken: mode === 'append' ? token : undefined
+                    continuationToken: mode === 'append' ? token : undefined,
+                    maxKeys: pageSize
                 })
             });
             const data = await res.json();
@@ -951,7 +973,7 @@ export default function S3BrowserPage() {
 
                                 {/* Pagination Footer */}
                                 {!browsingLoading && files.length > 0 && (
-                                    <div className="mt-3 px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center justify-between text-xs">
+                                    <div className="mt-3 px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center justify-between text-xs gap-3 flex-wrap">
                                         <div className="text-slate-400 flex items-center gap-2 flex-wrap">
                                             <span>
                                                 <span className="text-slate-200 font-mono font-bold">{files.length.toLocaleString()}</span>{' '}
@@ -974,20 +996,37 @@ export default function S3BrowserPage() {
                                                 <span className="text-slate-500 italic">· all loaded</span>
                                             )}
                                         </div>
-                                        {isTruncated && (
-                                            <button
-                                                onClick={loadMoreFiles}
-                                                disabled={loadingMore}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-wait text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
-                                                title="Fetch the next batch of items"
-                                            >
-                                                {loadingMore ? (
-                                                    <><RefreshCw className="animate-spin" size={14} /> Loading…</>
-                                                ) : (
-                                                    <>Load More <ChevronRight size={14} /></>
-                                                )}
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {/* Page size selector */}
+                                            <label className="flex items-center gap-2 text-slate-500 text-[11px] uppercase tracking-wider font-bold" title="Items fetched per request">
+                                                Per load
+                                                <select
+                                                    value={pageSize}
+                                                    onChange={(e) => setPageSize(Number(e.target.value))}
+                                                    disabled={loadingMore || browsingLoading}
+                                                    className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1.5 text-slate-200 text-xs focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50 cursor-pointer normal-case font-mono"
+                                                >
+                                                    <option value={100}>100</option>
+                                                    <option value={250}>250</option>
+                                                    <option value={500}>500</option>
+                                                    <option value={1000}>1000</option>
+                                                </select>
+                                            </label>
+                                            {isTruncated && (
+                                                <button
+                                                    onClick={loadMoreFiles}
+                                                    disabled={loadingMore}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-wait text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
+                                                    title="Fetch the next batch of items"
+                                                >
+                                                    {loadingMore ? (
+                                                        <><RefreshCw className="animate-spin" size={14} /> Loading…</>
+                                                    ) : (
+                                                        <>Load More <ChevronRight size={14} /></>
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
