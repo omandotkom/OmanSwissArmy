@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import {
     Folder, File, ArrowLeft, RefreshCw, Download, Cloud, LogOut, Database,
     ChevronRight, HardDrive, BarChart2, AlertCircle, Plus, Save, Trash2,
-    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud
+    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud,
+    Filter
 } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
@@ -85,6 +86,9 @@ export default function S3BrowserPage() {
     const [currentPrefix, setCurrentPrefix] = useState('');
     const [files, setFiles] = useState<S3FileItem[]>([]);
     const [browsingLoading, setBrowsingLoading] = useState(false);
+
+    // Filter
+    const [typeFilter, setTypeFilter] = useState<'all' | 'folder' | 'file'>('all');
 
     // Analytics
     const [usageLoading, setUsageLoading] = useState(false);
@@ -793,15 +797,38 @@ export default function S3BrowserPage() {
                                     </button>
                                 </div>
 
-                                {/* Breadcrumb */}
-                                <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-1 text-sm overflow-x-auto">
-                                    <button onClick={() => fetchFiles(selectedBucket, '')} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
-                                    {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
-                                        <React.Fragment key={i}>
-                                            <ChevronRight size={14} className="text-slate-600" />
-                                            <span className={`px-1 rounded ${i === arr.length - 1 ? 'text-slate-200 font-bold' : 'text-slate-400'}`}>{part}</span>
-                                        </React.Fragment>
-                                    ))}
+                                {/* Breadcrumb + Type Filter */}
+                                <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-3 text-sm overflow-x-auto">
+                                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                                        <button onClick={() => fetchFiles(selectedBucket, '')} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
+                                        {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
+                                            <React.Fragment key={i}>
+                                                <ChevronRight size={14} className="text-slate-600" />
+                                                <span className={`px-1 rounded ${i === arr.length - 1 ? 'text-slate-200 font-bold' : 'text-slate-400'}`}>{part}</span>
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+
+                                    {/* Type Filter Segmented Control */}
+                                    <div className="flex items-center gap-1 shrink-0 bg-slate-950 border border-slate-800 rounded-lg p-1" title="Filter by type">
+                                        <Filter size={12} className="text-slate-500 ml-1" />
+                                        {([
+                                            { key: 'all', label: 'All' },
+                                            { key: 'folder', label: 'Folders' },
+                                            { key: 'file', label: 'Files' },
+                                        ] as { key: 'all' | 'folder' | 'file', label: string }[]).map(opt => (
+                                            <button
+                                                key={opt.key}
+                                                onClick={() => setTypeFilter(opt.key)}
+                                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider transition-colors ${typeFilter === opt.key
+                                                    ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
+                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent'
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -837,7 +864,16 @@ export default function S3BrowserPage() {
                                                     <td colSpan={4} className="text-center py-12 text-slate-600 italic">Folder is empty</td>
                                                 </tr>
                                             )}
-                                            {files.map(file => (
+                                            {files.length > 0 && files.filter(f => typeFilter === 'all' || (typeFilter === 'folder' ? f.isDirectory : !f.isDirectory)).length === 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">
+                                                        No {typeFilter === 'folder' ? 'folders' : 'files'} in this folder
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {files
+                                                .filter(f => typeFilter === 'all' || (typeFilter === 'folder' ? f.isDirectory : !f.isDirectory))
+                                                .map(file => (
                                                 <tr key={file.key} className="group hover:bg-slate-800/80 transition-colors">
                                                     <td className="px-4 py-2 rounded-l-lg border-y border-l border-transparent group-hover:border-slate-700">
                                                         {file.isDirectory ? (
