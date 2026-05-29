@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import {
     Folder, File, ArrowLeft, RefreshCw, Download, Cloud, LogOut, Database,
     ChevronRight, HardDrive, BarChart2, AlertCircle, Plus, Save, Trash2,
-    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud
+    Settings, X, Edit2, Server, Eye, FileCode, FileImage, FileVideo, Music, FileText, UploadCloud,
+    Filter, Search
 } from 'lucide-react';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
@@ -86,6 +87,19 @@ export default function S3BrowserPage() {
     const [files, setFiles] = useState<S3FileItem[]>([]);
     const [browsingLoading, setBrowsingLoading] = useState(false);
 
+    // Pagination
+    const [nextToken, setNextToken] = useState<string | null>(null);
+    const [isTruncated, setIsTruncated] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [pageSize, setPageSize] = useState<number>(1000);
+
+    // Filter
+    const [typeFilter, setTypeFilter] = useState<'all' | 'folder' | 'file'>('all');
+
+    // Server-side prefix search
+    const [searchQuery, setSearchQuery] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
+
     // Analytics
     const [usageLoading, setUsageLoading] = useState(false);
     const [bucketUsage, setBucketUsage] = useState<BucketUsage | null>(null);
@@ -113,6 +127,43 @@ export default function S3BrowserPage() {
     useEffect(() => {
         loadProfiles();
     }, []);
+
+    // Restore preferred page size from localStorage on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('s3-browser-page-size');
+            if (saved) {
+                const n = Number(saved);
+                if ([100, 250, 500, 1000].includes(n)) {
+                    setPageSize(n);
+                }
+            }
+        } catch { /* localStorage may be unavailable */ }
+    }, []);
+
+    // Persist page size when changed
+    useEffect(() => {
+        try {
+            localStorage.setItem('s3-browser-page-size', String(pageSize));
+        } catch { /* ignore */ }
+    }, [pageSize]);
+
+    // Debounced server-side prefix search.
+    // When user types, wait 400ms then re-fetch with the search term applied.
+    useEffect(() => {
+        if (!isConnected || !selectedBucket) return;
+        if (searchQuery === appliedSearch) return; // nothing to do
+
+        const timer = setTimeout(() => {
+            setAppliedSearch(searchQuery);
+            fetchFiles(selectedBucket, currentPrefix, 'replace', undefined, searchQuery);
+            if (searchQuery) {
+                trackActivity({ action: "S3_SEARCH", label: `${selectedBucket}/${currentPrefix}`, details: { query: searchQuery } });
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery]);
 
     const loadProfiles = async () => {
         try {
@@ -281,11 +332,25 @@ export default function S3BrowserPage() {
         setIsEditingProfile(false);
         setFormName('');
         setFormConfig({ endpoint: '', region: 'us-east-1', accessKeyId: '', secretAccessKey: '' });
+        setNextToken(null);
+        setIsTruncated(false);
+        setSearchQuery('');
+        setAppliedSearch('');
         trackActivity({ action: "S3_DISCONNECT", label: "User Disconnect" });
     };
 
-    const fetchFiles = async (bucket: string, prefix: string) => {
-        setBrowsingLoading(true);
+    const fetchFiles = async (
+        bucket: string,
+        prefix: string,
+        mode: 'replace' | 'append' = 'replace',
+        token?: string,
+        search: string = ''
+    ) => {
+        if (mode === 'replace') {
+            setBrowsingLoading(true);
+        } else {
+            setLoadingMore(true);
+        }
         try {
             const profile = profiles.find(p => p.id === activeProfileId);
             const cfg = profile ? profile.config : formConfig;
@@ -293,26 +358,56 @@ export default function S3BrowserPage() {
             const res = await fetch('/api/s3/files', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...cfg, bucketName: bucket, prefix })
+                body: JSON.stringify({
+                    ...cfg,
+                    bucketName: bucket,
+                    prefix,
+                    continuationToken: mode === 'append' ? token : undefined,
+                    maxKeys: pageSize,
+                    searchPrefix: search
+                })
             });
             const data = await res.json();
             if (res.ok) {
-                setFiles(data.files || []);
-            } else {
+                const items = data.files || [];
+                if (mode === 'replace') {
+                    setFiles(items);
+                } else {
+                    setFiles(prev => [...prev, ...items]);
+                }
+                setNextToken(data.nextContinuationToken || null);
+                setIsTruncated(!!data.isTruncated);
+            } else if (mode === 'replace') {
                 setFiles([]);
+                setNextToken(null);
+                setIsTruncated(false);
             }
         } catch (err) {
             console.error(err);
+            if (mode === 'replace') {
+                setFiles([]);
+                setNextToken(null);
+                setIsTruncated(false);
+            }
         } finally {
             setBrowsingLoading(false);
+            setLoadingMore(false);
         }
+    };
+
+    const loadMoreFiles = () => {
+        if (!nextToken || loadingMore || browsingLoading) return;
+        fetchFiles(selectedBucket, currentPrefix, 'append', nextToken, appliedSearch);
+        trackActivity({ action: "S3_LOAD_MORE", label: `${selectedBucket}/${currentPrefix}` });
     };
 
     const handleBucketSelect = (bucketName: string) => {
         setSelectedBucket(bucketName);
         setCurrentPrefix('');
         setBucketUsage(null);
-        fetchFiles(bucketName, '');
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(bucketName, '', 'replace', undefined, '');
         trackActivity({ action: "SELECT_BUCKET", label: bucketName });
     };
 
@@ -320,7 +415,9 @@ export default function S3BrowserPage() {
     const handleFolderClick = (folderName: string) => {
         const newPrefix = currentPrefix + folderName + '/';
         setCurrentPrefix(newPrefix);
-        fetchFiles(selectedBucket, newPrefix);
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(selectedBucket, newPrefix, 'replace', undefined, '');
         trackActivity({ action: "NAVIGATE_S3_FOLDER", label: folderName });
     };
 
@@ -330,7 +427,9 @@ export default function S3BrowserPage() {
         const lastSlash = p.lastIndexOf('/');
         const newPrefix = lastSlash === -1 ? '' : p.substring(0, lastSlash + 1);
         setCurrentPrefix(newPrefix);
-        fetchFiles(selectedBucket, newPrefix);
+        setSearchQuery('');
+        setAppliedSearch('');
+        fetchFiles(selectedBucket, newPrefix, 'replace', undefined, '');
     };
 
     const handleDownload = async (fileKey: string) => {
@@ -554,7 +653,7 @@ export default function S3BrowserPage() {
         setIsUploading(false);
         setUploadProgress(null);
         if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
-        fetchFiles(selectedBucket, currentPrefix); // Refresh list
+        fetchFiles(selectedBucket, currentPrefix, 'replace', undefined, appliedSearch); // Refresh list (preserves active search)
         trackActivity({ action: "UPLOAD_FILES", label: selectedBucket, details: { count: fileList.length } });
     };
 
@@ -793,15 +892,60 @@ export default function S3BrowserPage() {
                                     </button>
                                 </div>
 
-                                {/* Breadcrumb */}
-                                <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-1 text-sm overflow-x-auto">
-                                    <button onClick={() => fetchFiles(selectedBucket, '')} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
-                                    {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
-                                        <React.Fragment key={i}>
-                                            <ChevronRight size={14} className="text-slate-600" />
-                                            <span className={`px-1 rounded ${i === arr.length - 1 ? 'text-slate-200 font-bold' : 'text-slate-400'}`}>{part}</span>
-                                        </React.Fragment>
-                                    ))}
+                                {/* Breadcrumb + Search + Type Filter */}
+                                <div className="px-4 py-2 bg-slate-800/30 border-t border-slate-800 flex items-center gap-3 text-sm overflow-x-auto">
+                                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                                        <button onClick={() => { setCurrentPrefix(''); setSearchQuery(''); setAppliedSearch(''); fetchFiles(selectedBucket, '', 'replace', undefined, ''); }} disabled={isUploading} className="p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white font-medium transition-colors disabled:opacity-50">root</button>
+                                        {currentPrefix.split('/').filter(Boolean).map((part, i, arr) => (
+                                            <React.Fragment key={i}>
+                                                <ChevronRight size={14} className="text-slate-600" />
+                                                <span className={`px-1 rounded ${i === arr.length - 1 ? 'text-slate-200 font-bold' : 'text-slate-400'}`}>{part}</span>
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+
+                                    {/* Server-side prefix search */}
+                                    <div className="shrink-0 relative" title="Server-side prefix search within current folder. Matches keys that start with this text.">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder="Filter by prefix..."
+                                            disabled={isUploading}
+                                            className="bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-8 py-1.5 text-slate-200 text-xs focus:ring-2 focus:ring-orange-500 outline-none w-56 placeholder:text-slate-600 disabled:opacity-50"
+                                        />
+                                        {searchQuery && (
+                                            <button
+                                                onClick={() => setSearchQuery('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors"
+                                                title="Clear search"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Type Filter Segmented Control */}
+                                    <div className="flex items-center gap-1 shrink-0 bg-slate-950 border border-slate-800 rounded-lg p-1" title="Filter by type">
+                                        <Filter size={12} className="text-slate-500 ml-1" />
+                                        {([
+                                            { key: 'all', label: 'All' },
+                                            { key: 'folder', label: 'Folders' },
+                                            { key: 'file', label: 'Files' },
+                                        ] as { key: 'all' | 'folder' | 'file', label: string }[]).map(opt => (
+                                            <button
+                                                key={opt.key}
+                                                onClick={() => setTypeFilter(opt.key)}
+                                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium uppercase tracking-wider transition-colors ${typeFilter === opt.key
+                                                    ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
+                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent'
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -834,10 +978,23 @@ export default function S3BrowserPage() {
                                             )}
                                             {files.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">Folder is empty</td>
+                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">
+                                                        {appliedSearch ? (
+                                                            <>No items match prefix &ldquo;<span className="text-slate-400 not-italic font-mono">{appliedSearch}</span>&rdquo; in this folder</>
+                                                        ) : 'Folder is empty'}
+                                                    </td>
                                                 </tr>
                                             )}
-                                            {files.map(file => (
+                                            {files.length > 0 && files.filter(f => typeFilter === 'all' || (typeFilter === 'folder' ? f.isDirectory : !f.isDirectory)).length === 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="text-center py-12 text-slate-600 italic">
+                                                        No {typeFilter === 'folder' ? 'folders' : 'files'} in this folder
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {files
+                                                .filter(f => typeFilter === 'all' || (typeFilter === 'folder' ? f.isDirectory : !f.isDirectory))
+                                                .map(file => (
                                                 <tr key={file.key} className="group hover:bg-slate-800/80 transition-colors">
                                                     <td className="px-4 py-2 rounded-l-lg border-y border-l border-transparent group-hover:border-slate-700">
                                                         {file.isDirectory ? (
@@ -869,6 +1026,65 @@ export default function S3BrowserPage() {
                                             ))}
                                         </tbody>
                                     </table>
+                                )}
+
+                                {/* Pagination Footer */}
+                                {!browsingLoading && files.length > 0 && (
+                                    <div className="mt-3 px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center justify-between text-xs gap-3 flex-wrap">
+                                        <div className="text-slate-400 flex items-center gap-2 flex-wrap">
+                                            <span>
+                                                <span className="text-slate-200 font-mono font-bold">{files.length.toLocaleString()}</span>{' '}
+                                                {files.length === 1 ? 'item' : 'items'} loaded
+                                            </span>
+                                            {typeFilter !== 'all' && (() => {
+                                                const visible = files.filter(f => typeFilter === 'folder' ? f.isDirectory : !f.isDirectory).length;
+                                                return (
+                                                    <span className="text-slate-500">
+                                                        · <span className="text-orange-400 font-mono">{visible.toLocaleString()}</span> visible after filter
+                                                    </span>
+                                                );
+                                            })()}
+                                            {isTruncated && (
+                                                <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] uppercase tracking-wider font-bold">
+                                                    More available
+                                                </span>
+                                            )}
+                                            {!isTruncated && (
+                                                <span className="text-slate-500 italic">· all loaded</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {/* Page size selector */}
+                                            <label className="flex items-center gap-2 text-slate-500 text-[11px] uppercase tracking-wider font-bold" title="Items fetched per request">
+                                                Per load
+                                                <select
+                                                    value={pageSize}
+                                                    onChange={(e) => setPageSize(Number(e.target.value))}
+                                                    disabled={loadingMore || browsingLoading}
+                                                    className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1.5 text-slate-200 text-xs focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50 cursor-pointer normal-case font-mono"
+                                                >
+                                                    <option value={100}>100</option>
+                                                    <option value={250}>250</option>
+                                                    <option value={500}>500</option>
+                                                    <option value={1000}>1000</option>
+                                                </select>
+                                            </label>
+                                            {isTruncated && (
+                                                <button
+                                                    onClick={loadMoreFiles}
+                                                    disabled={loadingMore}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-wait text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
+                                                    title="Fetch the next batch of items"
+                                                >
+                                                    {loadingMore ? (
+                                                        <><RefreshCw className="animate-spin" size={14} /> Loading…</>
+                                                    ) : (
+                                                        <>Load More <ChevronRight size={14} /></>
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </>

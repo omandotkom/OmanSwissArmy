@@ -44,26 +44,36 @@ export class S3Service {
         return response.Buckets || [];
     }
 
-    async listFiles(bucketName: string, prefix: string = '') {
-        // Ensure prefix ends with / if it's not empty, to simulate folders
-        const cleanPrefix = prefix === '' || prefix === '/' ? '' : (prefix.endsWith('/') ? prefix : `${prefix}/`);
+    async listFiles(
+        bucketName: string,
+        prefix: string = '',
+        continuationToken?: string,
+        maxKeys: number = 1000,
+        searchPrefix: string = ''
+    ) {
+        // Folder prefix: always normalised to end with '/' (or empty for root)
+        const folderPrefix = prefix === '' || prefix === '/' ? '' : (prefix.endsWith('/') ? prefix : `${prefix}/`);
+        // Actual S3 query prefix: folder + optional search term (search is appended as-is)
+        const queryPrefix = folderPrefix + (searchPrefix || '');
 
         const command = new ListObjectsV2Command({
             Bucket: bucketName,
-            Prefix: cleanPrefix,
-            Delimiter: '/'
+            Prefix: queryPrefix,
+            Delimiter: '/',
+            MaxKeys: maxKeys,
+            ContinuationToken: continuationToken
         });
 
         const response = await this.client.send(command);
 
         const items: S3FileItem[] = [];
 
-        // Add Folders (CommonPrefixes)
+        // Add Folders (CommonPrefixes) — strip folderPrefix so name is relative
         response.CommonPrefixes?.forEach(p => {
-            if (p.Prefix) {
-                const name = p.Prefix.replace(cleanPrefix, '').replace('/', '');
+            if (p.Prefix && p.Prefix.startsWith(folderPrefix)) {
+                const relative = p.Prefix.substring(folderPrefix.length).replace(/\/$/, '');
                 items.push({
-                    name: name,
+                    name: relative,
                     key: p.Prefix,
                     size: 0,
                     isDirectory: true
@@ -71,12 +81,12 @@ export class S3Service {
             }
         });
 
-        // Add Files (Contents)
+        // Add Files (Contents) — strip folderPrefix so name is relative
         response.Contents?.forEach(c => {
-            if (c.Key && c.Key !== cleanPrefix) { // Skip the folder object itself if it exists
-                const name = c.Key.replace(cleanPrefix, '');
+            if (c.Key && c.Key !== folderPrefix && c.Key.startsWith(folderPrefix)) {
+                const name = c.Key.substring(folderPrefix.length);
                 items.push({
-                    name: name,
+                    name,
                     key: c.Key,
                     lastModified: c.LastModified,
                     size: c.Size || 0,
@@ -85,7 +95,11 @@ export class S3Service {
             }
         });
 
-        return items;
+        return {
+            items,
+            nextContinuationToken: response.NextContinuationToken || null,
+            isTruncated: !!response.IsTruncated
+        };
     }
 
     async getFilePresignedUrl(bucketName: string, key: string) {
