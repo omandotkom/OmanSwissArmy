@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('List Buckets Error Details:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const code = error?.Code || error?.name || '';
+        return NextResponse.json({ error: error.message, code }, { status: 500 });
     }
 }

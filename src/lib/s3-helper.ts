@@ -22,9 +22,13 @@ export class S3Service {
     private client: S3Client;
 
     constructor(config: S3Config) {
+        const endpoint = config.endpoint && !config.endpoint.startsWith('http')
+            ? `https://${config.endpoint}`
+            : config.endpoint || undefined;
+
         this.client = new S3Client({
             region: config.region,
-            endpoint: config.endpoint,
+            endpoint,
             credentials: {
                 accessKeyId: config.accessKeyId,
                 secretAccessKey: config.secretAccessKey

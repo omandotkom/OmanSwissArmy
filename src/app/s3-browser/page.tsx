@@ -107,7 +107,7 @@ export default function S3BrowserPage() {
 
     // --- Modals State ---
     const [showAddBucketModal, setShowAddBucketModal] = useState(false);
-    const [newBucketName, setNewBucketName] = useState('');
+    const [newBucketNames, setNewBucketNames] = useState('');
 
     const [showCapacityModal, setShowCapacityModal] = useState(false);
     const [capacityInput, setCapacityInput] = useState('');
@@ -272,10 +272,10 @@ export default function S3BrowserPage() {
                     setBuckets(initialBuckets);
                     setIsConnected(true);
                     trackActivity({ action: "S3_CONNECT_PARTIAL", label: "Used Cached Buckets" });
-                } else if (data.error && (data.error.includes('AccessDenied') || data.error.includes('Forbidden'))) {
+                } else if (data.code === 'AccessDenied' || data.error?.includes('Access Denied') || data.error?.includes('AccessDenied') || data.error?.includes('Forbidden')) {
                     setIsConnected(true);
-                    setTimeout(() => alert("Connected, but 'ListAllMyBuckets' was denied.\nPlease add known buckets manually via the (+) button."), 500);
-                    trackActivity({ action: "S3_CONNECT_DENIED_LIST", label: "Access Denied List" });
+                    setShowAddBucketModal(true);
+                    trackActivity({ action: "S3_CONNECT_DENIED_LIST", label: "Access Denied - Prompt Manual" });
                 } else {
                     setError(data.error || 'Connection Failed');
                     trackActivity({ action: "S3_CONNECT_FAILED", label: data.error });
@@ -291,35 +291,45 @@ export default function S3BrowserPage() {
 
     // --- Actions: Browser ---
 
-    const handleAddManualBucket = async () => {
-        if (!newBucketName) return;
+    const handleAddManualBuckets = async () => {
+        const names = newBucketNames
+            .split('\n')
+            .map(n => n.trim())
+            .filter(n => n.length > 0);
 
-        if (buckets.find(b => b.Name === newBucketName)) {
-            setSelectedBucket(newBucketName);
-            setShowAddBucketModal(false);
-            setNewBucketName('');
-            handleBucketSelect(newBucketName);
-            return;
-        }
+        if (names.length === 0) return;
 
-        const newBucket: Bucket = { Name: newBucketName, CreationDate: new Date().toISOString(), isManual: true };
-        const newBuckets = [newBucket, ...buckets];
-        setBuckets(newBuckets);
+        const uniqueNames = [...new Set(names)];
+        const existingNames = new Set(buckets.map(b => b.Name));
+        const toAdd = uniqueNames.filter(n => !existingNames.has(n));
+        const firstValid = uniqueNames[0];
 
-        // Save to Profile in DB
-        if (activeProfileId) {
-            const profile = profiles.find(p => p.id === activeProfileId);
-            if (profile) {
-                const updatedProfile = { ...profile, manualBuckets: [...(profile.manualBuckets || []), newBucket] };
-                await saveS3Connection(updatedProfile);
-                await loadProfiles();
+        if (toAdd.length > 0) {
+            const newBuckets: Bucket[] = toAdd.map(n => ({
+                Name: n,
+                CreationDate: new Date().toISOString(),
+                isManual: true
+            }));
+            const updatedBuckets = [...newBuckets, ...buckets];
+            setBuckets(updatedBuckets);
+
+            if (activeProfileId) {
+                const profile = profiles.find(p => p.id === activeProfileId);
+                if (profile) {
+                    const updatedProfile = {
+                        ...profile,
+                        manualBuckets: [...(profile.manualBuckets || []), ...newBuckets]
+                    };
+                    await saveS3Connection(updatedProfile);
+                    await loadProfiles();
+                }
             }
         }
 
         setShowAddBucketModal(false);
-        setNewBucketName('');
-        handleBucketSelect(newBucketName);
-        trackActivity({ action: "ADD_MANUAL_BUCKET", label: newBucketName });
+        setNewBucketNames('');
+        handleBucketSelect(firstValid);
+        trackActivity({ action: "ADD_MANUAL_BUCKETS", label: uniqueNames.join(', '), details: { count: toAdd.length } });
     };
 
     const handleDisconnect = () => {
@@ -1094,19 +1104,19 @@ export default function S3BrowserPage() {
 
             {/* --- Modals --- */}
 
-            <Modal title="Add Bucket Manually" isOpen={showAddBucketModal} onClose={() => setShowAddBucketModal(false)}>
+            <Modal title="Add Buckets Manually" isOpen={showAddBucketModal} onClose={() => setShowAddBucketModal(false)}>
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400">Enter the exact name of the bucket you want to access.</p>
-                    <input
-                        type="text"
-                        placeholder="my-bucket-name"
-                        value={newBucketName}
-                        onChange={(e) => setNewBucketName(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-slate-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                    <p className="text-sm text-slate-400">Enter bucket names, one per line.</p>
+                    <textarea
+                        rows={5}
+                        placeholder={"bucket-1\nbucket-2\nbucket-3"}
+                        value={newBucketNames}
+                        onChange={(e) => setNewBucketNames(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-slate-200 focus:ring-2 focus:ring-orange-500 outline-none font-mono text-sm resize-none"
                     />
                     <div className="flex justify-end gap-2 mt-4">
                         <button onClick={() => setShowAddBucketModal(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancel</button>
-                        <button onClick={handleAddManualBucket} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg">Add Bucket</button>
+                        <button onClick={handleAddManualBuckets} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg">Add Buckets</button>
                     </div>
                 </div>
             </Modal>
